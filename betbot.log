@@ -1,0 +1,756 @@
+22:14:04 - Fetching odds for upcoming...
+22:14:05 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/upcoming/odds?apiKey=877e65619c0ebc08e7ea216f89fdcd60&regions=eu&markets=h2h%2Ctotals%2Cspreads&oddsFormat=decimal "HTTP/1.1 200 OK"
+22:14:05 - Retrieved 20 matches from Odds API. Starting AI Analysis...
+22:14:05 - Preparing data for HIFK...
+22:14:05 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:17:09 - Failed to download data: <urlopen error [WinError 10060] Baðlanýlan uygun olarak belli bir süre içinde yanýt vermediðinden veya kurulan
+baðlantý baðlanýlan ana bilgisayar yanýt vermediðinden bir baðlantý kurulamadý>
+22:17:09 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:17:30 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:17:30 - Gemini AI analyzing: HIFK vs KalPa
+22:17:30 - Preparing data for Ässät...
+22:17:30 - AFC is enabled with max remote calls: 10.
+22:17:30 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:17:38 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+22:17:51 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:17:51 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:18:12 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:18:12 - Gemini AI analyzing: Ässät vs Kiekko-Espoo
+22:18:12 - Preparing data for Mirra Andreeva...
+22:18:12 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:18:12 - AFC is enabled with max remote calls: 10.
+22:18:33 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:18:33 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:18:43 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+22:18:54 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:18:54 - Gemini AI analyzing: Mirra Andreeva vs Victoria Mboko
+22:18:54 - Preparing data for Washington Nationals...
+22:18:54 - AFC is enabled with max remote calls: 10.
+22:18:54 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:19:15 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:19:15 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:19:32 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+22:19:36 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:19:36 - Gemini AI analyzing: Washington Nationals vs Baltimore Orioles
+22:19:36 - Preparing data for Kalmar HC...
+22:19:36 - AFC is enabled with max remote calls: 10.
+22:19:36 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:19:51 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+22:19:57 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:19:57 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:20:18 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:20:18 - Gemini AI analyzing: Kalmar HC vs Södertälje SK
+22:20:18 - AFC is enabled with max remote calls: 10.
+22:20:18 - Fetching odds for upcoming...
+22:20:18 - Retrieved 20 matches from Odds API. Starting AI Analysis...
+22:20:18 - Fetching odds for upcoming...
+22:20:18 - Retrieved 20 matches from Odds API. Starting AI Analysis...
+22:20:18 - Fetching odds for upcoming...
+22:20:18 - Retrieved 20 matches from Odds API. Starting AI Analysis...
+22:20:18 - Fetching odds for upcoming...
+22:20:18 - Retrieved 20 matches from Odds API. Starting AI Analysis...
+22:20:18 - Using cached analysis for HIFK vs KalPa
+22:20:18 - Using cached analysis for Ässät vs Kiekko-Espoo
+22:20:18 - Using cached analysis for Mirra Andreeva vs Victoria Mboko
+22:20:18 - Using cached analysis for Washington Nationals vs Baltimore Orioles
+22:20:18 - Preparing data for Kalmar HC...
+22:20:18 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:20:36 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+22:20:39 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:20:39 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:21:00 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:21:00 - Gemini AI analyzing: Kalmar HC vs Södertälje SK
+22:21:00 - Using cached analysis for HIFK vs KalPa
+22:21:00 - Using cached analysis for Ässät vs Kiekko-Espoo
+22:21:00 - Using cached analysis for Mirra Andreeva vs Victoria Mboko
+22:21:00 - AFC is enabled with max remote calls: 10.
+22:21:00 - Using cached analysis for Washington Nationals vs Baltimore Orioles
+22:21:00 - Preparing data for Kalmar HC...
+22:21:00 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:21:08 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+22:21:21 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:21:21 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:21:42 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:21:42 - Gemini AI analyzing: Kalmar HC vs Södertälje SK
+22:21:42 - Using cached analysis for HIFK vs KalPa
+22:21:42 - AFC is enabled with max remote calls: 10.
+22:21:42 - Using cached analysis for Ässät vs Kiekko-Espoo
+22:21:42 - Using cached analysis for Mirra Andreeva vs Victoria Mboko
+22:21:42 - Using cached analysis for Washington Nationals vs Baltimore Orioles
+22:21:42 - Preparing data for Kalmar HC...
+22:21:42 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:21:48 - Failed to download data: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1032)>
+22:21:48 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:21:51 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+22:22:09 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:22:09 - Gemini AI analyzing: Kalmar HC vs Södertälje SK
+22:22:09 - Using cached analysis for HIFK vs KalPa
+22:22:09 - Using cached analysis for Ässät vs Kiekko-Espoo
+22:22:09 - Using cached analysis for Mirra Andreeva vs Victoria Mboko
+22:22:09 - Using cached analysis for Washington Nationals vs Baltimore Orioles
+22:22:09 - Preparing data for Kalmar HC...
+22:22:09 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:22:09 - AFC is enabled with max remote calls: 10.
+22:22:19 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+22:22:30 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:22:30 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:22:51 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:22:51 - Gemini AI analyzing: Kalmar HC vs Södertälje SK
+22:22:51 - AFC is enabled with max remote calls: 10.
+22:22:51 - Finished AI analysis for upcoming.
+22:22:51 - Finished AI analysis for upcoming.
+22:22:51 - Finished AI analysis for upcoming.
+22:22:51 - Finished AI analysis for upcoming.
+22:23:06 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+22:23:06 - Finished AI analysis for upcoming.
+22:27:13 - Fetching odds for upcoming...
+22:27:14 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/upcoming/odds?apiKey=877e65619c0ebc08e7ea216f89fdcd60&regions=eu&markets=h2h%2Ctotals%2Cspreads&oddsFormat=decimal "HTTP/1.1 200 OK"
+22:27:14 - Retrieved 17 matches from Odds API. Starting AI Analysis...
+22:27:14 - Preparing data for HIFK...
+22:27:14 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:27:35 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:27:35 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:27:56 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:27:56 - Gemini AI analyzing: HIFK vs KalPa
+22:27:56 - Preparing data for Mirra Andreeva...
+22:27:56 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:27:56 - AFC is enabled with max remote calls: 10.
+22:28:05 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+22:28:17 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:28:17 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:28:38 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:28:38 - Gemini AI analyzing: Mirra Andreeva vs Victoria Mboko
+22:28:38 - Preparing data for Washington Nationals...
+22:28:38 - AFC is enabled with max remote calls: 10.
+22:28:38 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:29:06 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+22:32:13 - Failed to download data: <urlopen error [WinError 10060] Baðlanýlan uygun olarak belli bir süre içinde yanýt vermediðinden veya kurulan
+baðlantý baðlanýlan ana bilgisayar yanýt vermediðinden bir baðlantý kurulamadý>
+22:32:13 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:32:34 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:32:34 - Gemini AI analyzing: Washington Nationals vs Baltimore Orioles
+22:32:34 - Preparing data for Kalmar HC...
+22:32:34 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:32:34 - AFC is enabled with max remote calls: 10.
+22:32:42 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+22:36:34 - Failed to download data: <urlopen error [WinError 10060] Baðlanýlan uygun olarak belli bir süre içinde yanýt vermediðinden veya kurulan
+baðlantý baðlanýlan ana bilgisayar yanýt vermediðinden bir baðlantý kurulamadý>
+22:36:34 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:36:56 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:36:56 - Gemini AI analyzing: Kalmar HC vs Södertälje SK
+22:36:56 - Preparing data for Frölunda HC...
+22:36:56 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:36:56 - AFC is enabled with max remote calls: 10.
+22:37:15 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+22:37:17 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:37:17 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:37:36 - Failed to download data: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1032)>
+22:37:36 - Gemini AI analyzing: Frölunda HC vs Luleå HF
+22:37:36 - AFC is enabled with max remote calls: 10.
+22:37:36 - Fetching odds for upcoming...
+22:37:36 - Retrieved 17 matches from Odds API. Starting AI Analysis...
+22:37:36 - Fetching odds for upcoming...
+22:37:36 - Retrieved 17 matches from Odds API. Starting AI Analysis...
+22:37:36 - Fetching odds for upcoming...
+22:37:36 - Retrieved 17 matches from Odds API. Starting AI Analysis...
+22:37:36 - Using cached analysis for HIFK vs KalPa
+22:37:36 - Using cached analysis for Mirra Andreeva vs Victoria Mboko
+22:37:36 - Using cached analysis for Washington Nationals vs Baltimore Orioles
+22:37:36 - Using cached analysis for Kalmar HC vs Södertälje SK
+22:37:36 - Preparing data for Frölunda HC...
+22:37:36 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:37:57 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:37:57 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:38:00 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+22:38:11 - Failed to download data: <urlopen error [WinError 10054] Varolan bir baðlantý uzaktaki bir ana bilgisayar tarafýndan zorla kapatýldý>
+22:38:11 - Gemini AI analyzing: Frölunda HC vs Luleå HF
+22:38:11 - Using cached analysis for HIFK vs KalPa
+22:38:11 - Using cached analysis for Mirra Andreeva vs Victoria Mboko
+22:38:11 - Using cached analysis for Washington Nationals vs Baltimore Orioles
+22:38:11 - Using cached analysis for Kalmar HC vs Södertälje SK
+22:38:11 - Preparing data for Frölunda HC...
+22:38:11 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:38:11 - AFC is enabled with max remote calls: 10.
+22:38:19 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+22:38:32 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:38:32 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:38:53 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:38:53 - Gemini AI analyzing: Frölunda HC vs Luleå HF
+22:38:53 - Using cached analysis for HIFK vs KalPa
+22:38:53 - Using cached analysis for Mirra Andreeva vs Victoria Mboko
+22:38:53 - Using cached analysis for Washington Nationals vs Baltimore Orioles
+22:38:53 - Using cached analysis for Kalmar HC vs Södertälje SK
+22:38:53 - Preparing data for Frölunda HC...
+22:38:53 - AFC is enabled with max remote calls: 10.
+22:38:53 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:39:03 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+22:39:14 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:39:14 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:39:35 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:39:35 - Gemini AI analyzing: Frölunda HC vs Luleå HF
+22:39:35 - AFC is enabled with max remote calls: 10.
+22:39:35 - Finished AI analysis for upcoming.
+22:39:35 - Finished AI analysis for upcoming.
+22:39:35 - Finished AI analysis for upcoming.
+22:39:35 - Fetching odds for upcoming...
+22:39:35 - Retrieved 17 matches from Odds API. Starting AI Analysis...
+22:39:35 - Using cached analysis for HIFK vs KalPa
+22:39:35 - Using cached analysis for Mirra Andreeva vs Victoria Mboko
+22:39:35 - Using cached analysis for Washington Nationals vs Baltimore Orioles
+22:39:35 - Using cached analysis for Kalmar HC vs Södertälje SK
+22:39:35 - Using cached analysis for Frölunda HC vs Luleå HF
+22:39:35 - Finished AI analysis for upcoming.
+22:39:35 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+22:39:37 - Fetching odds for upcoming...
+22:39:38 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/upcoming/odds?apiKey=877e65619c0ebc08e7ea216f89fdcd60&regions=eu&markets=h2h%2Ctotals%2Cspreads&oddsFormat=decimal "HTTP/1.1 200 OK"
+22:39:38 - Retrieved 16 matches from Odds API. Starting AI Analysis...
+22:39:38 - Preparing prompt and historical data for HIFK...
+22:39:38 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:39:59 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:39:59 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:40:20 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:40:20 - Gemini AI analyzing: HIFK vs KalPa
+22:40:20 - Preparing prompt and historical data for Kalmar HC...
+22:40:20 - AFC is enabled with max remote calls: 10.
+22:40:20 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:40:20 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+22:40:41 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:40:41 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:41:02 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:41:02 - Gemini AI analyzing: Kalmar HC vs Södertälje SK
+22:41:02 - Preparing prompt and historical data for Frölunda HC...
+22:41:02 - AFC is enabled with max remote calls: 10.
+22:41:02 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:41:02 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+22:41:23 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:41:23 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:41:44 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:41:44 - Gemini AI analyzing: Frölunda HC vs Luleå HF
+22:41:44 - Preparing prompt and historical data for Iowa Hawkeyes...
+22:41:44 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:41:44 - AFC is enabled with max remote calls: 10.
+22:41:44 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+22:42:05 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:42:05 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:42:09 - Failed to download data: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1032)>
+22:42:09 - Preparing prompt and historical data for Skellefteå AIK...
+22:42:09 - Fetching NBA standings from nba_api...
+22:42:09 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:42:09 - NBA standings fetched successfully.
+22:42:30 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:42:30 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+22:42:51 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+22:42:51 - Gemini AI analyzing: Skellefteå AIK vs Malmö Redhawks
+22:42:51 - AFC is enabled with max remote calls: 10.
+22:42:51 - Gemini API Error: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 39.65363832s.', 'status': 'RESOURCE_EXHAUSTED', 'details': [{'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Learn more about Gemini API quotas', 'url': 'https://ai.google.dev/gemini-api/docs/rate-limits'}]}, {'@type': 'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'quotaMetric': 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', 'quotaDimensions': {'location': 'global', 'model': 'gemini-2.5-flash'}, 'quotaValue': '20'}]}, {'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '39s'}]}}
+22:42:51 - Gemini API Error: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 57.575027554s.', 'status': 'RESOURCE_EXHAUSTED', 'details': [{'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Learn more about Gemini API quotas', 'url': 'https://ai.google.dev/gemini-api/docs/rate-limits'}]}, {'@type': 'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'quotaMetric': 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', 'quotaDimensions': {'location': 'global', 'model': 'gemini-2.5-flash'}, 'quotaValue': '20'}]}, {'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '57s'}]}}
+22:42:51 - Gemini API Error: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 15.515743747s.', 'status': 'RESOURCE_EXHAUSTED', 'details': [{'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Learn more about Gemini API quotas', 'url': 'https://ai.google.dev/gemini-api/docs/rate-limits'}]}, {'@type': 'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'quotaMetric': 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', 'quotaDimensions': {'location': 'global', 'model': 'gemini-2.5-flash'}, 'quotaValue': '20'}]}, {'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '15s'}]}}
+22:42:51 - Gemini AI analyzing: Iowa Hawkeyes vs Virginia Cavaliers
+22:42:51 - AFC is enabled with max remote calls: 10.
+22:42:51 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+22:42:51 - Gemini API Error: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 8.900424475s.', 'status': 'RESOURCE_EXHAUSTED', 'details': [{'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Learn more about Gemini API quotas', 'url': 'https://ai.google.dev/gemini-api/docs/rate-limits'}]}, {'@type': 'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'quotaMetric': 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', 'quotaDimensions': {'location': 'global', 'model': 'gemini-2.5-flash'}, 'quotaValue': '20'}]}, {'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '8s'}]}}
+22:42:51 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+22:42:51 - Gemini API Error: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 8.900283736s.', 'status': 'RESOURCE_EXHAUSTED', 'details': [{'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Learn more about Gemini API quotas', 'url': 'https://ai.google.dev/gemini-api/docs/rate-limits'}]}, {'@type': 'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'quotaMetric': 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', 'quotaDimensions': {'location': 'global', 'model': 'gemini-2.5-flash'}, 'quotaValue': '20'}]}, {'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '8s'}]}}
+22:42:51 - Finished AI analysis for upcoming.
+22:43:36 - Fetching odds for upcoming...
+22:43:36 - Retrieved 16 matches from Odds API. Starting AI Analysis...
+22:43:36 - Using 24h cached analysis for HIFK vs KalPa
+22:43:36 - Using 24h cached analysis for Kalmar HC vs Södertälje SK
+22:43:36 - Using 24h cached analysis for Frölunda HC vs Luleå HF
+22:43:36 - Using 24h cached analysis for Iowa Hawkeyes vs Virginia Cavaliers
+22:43:36 - Using 24h cached analysis for Skellefteå AIK vs Malmö Redhawks
+22:43:36 - Finished AI analysis for upcoming.
+22:47:43 - Fetching odds for upcoming...
+22:47:43 - Retrieved 16 matches from Odds API. Starting AI Analysis...
+22:47:43 - Using 24h cached analysis for HIFK vs KalPa
+22:47:43 - Using 24h cached analysis for Kalmar HC vs Södertälje SK
+22:47:43 - Using 24h cached analysis for Frölunda HC vs Luleå HF
+22:47:43 - Using 24h cached analysis for Iowa Hawkeyes vs Virginia Cavaliers
+22:47:43 - Using 24h cached analysis for Skellefteå AIK vs Malmö Redhawks
+22:47:43 - Finished AI analysis for upcoming.
+22:47:49 - Fetching odds for upcoming...
+22:47:49 - Retrieved 16 matches from Odds API. Starting AI Analysis...
+22:47:49 - Using 24h cached analysis for HIFK vs KalPa
+22:47:49 - Using 24h cached analysis for Kalmar HC vs Södertälje SK
+22:47:49 - Using 24h cached analysis for Frölunda HC vs Luleå HF
+22:47:49 - Using 24h cached analysis for Iowa Hawkeyes vs Virginia Cavaliers
+22:47:49 - Using 24h cached analysis for Skellefteå AIK vs Malmö Redhawks
+22:47:49 - Finished AI analysis for upcoming.
+22:47:56 - Fetching odds for upcoming...
+22:47:56 - Retrieved 16 matches from Odds API. Starting AI Analysis...
+22:47:56 - Using 24h cached analysis for HIFK vs KalPa
+22:47:56 - Using 24h cached analysis for Kalmar HC vs Södertälje SK
+22:47:56 - Using 24h cached analysis for Frölunda HC vs Luleå HF
+22:47:56 - Using 24h cached analysis for Iowa Hawkeyes vs Virginia Cavaliers
+22:47:56 - Using 24h cached analysis for Skellefteå AIK vs Malmö Redhawks
+22:47:56 - Finished AI analysis for upcoming.
+22:48:00 - Fetching odds for upcoming...
+22:48:00 - Retrieved 16 matches from Odds API. Starting AI Analysis...
+22:48:00 - Using 24h cached analysis for HIFK vs KalPa
+22:48:00 - Using 24h cached analysis for Kalmar HC vs Södertälje SK
+22:48:00 - Using 24h cached analysis for Frölunda HC vs Luleå HF
+22:48:00 - Using 24h cached analysis for Iowa Hawkeyes vs Virginia Cavaliers
+22:48:00 - Using 24h cached analysis for Skellefteå AIK vs Malmö Redhawks
+22:48:00 - Finished AI analysis for upcoming.
+22:48:07 - Fetching odds for upcoming...
+22:48:07 - Retrieved 16 matches from Odds API. Starting AI Analysis...
+22:48:07 - Using 24h cached analysis for HIFK vs KalPa
+22:48:07 - Using 24h cached analysis for Kalmar HC vs Södertälje SK
+22:48:07 - Using 24h cached analysis for Frölunda HC vs Luleå HF
+22:48:07 - Using 24h cached analysis for Iowa Hawkeyes vs Virginia Cavaliers
+22:48:07 - Using 24h cached analysis for Skellefteå AIK vs Malmö Redhawks
+22:48:07 - Finished AI analysis for upcoming.
+22:48:17 - Fetching odds for upcoming...
+22:48:17 - Retrieved 16 matches from Odds API. Starting AI Analysis...
+22:48:17 - Using 24h cached analysis for HIFK vs KalPa
+22:48:17 - Using 24h cached analysis for Kalmar HC vs Södertälje SK
+22:48:17 - Using 24h cached analysis for Frölunda HC vs Luleå HF
+22:48:17 - Using 24h cached analysis for Iowa Hawkeyes vs Virginia Cavaliers
+22:48:17 - Using 24h cached analysis for Skellefteå AIK vs Malmö Redhawks
+22:48:17 - Finished AI analysis for upcoming.
+22:48:22 - Fetching odds for upcoming...
+22:48:22 - Retrieved 16 matches from Odds API. Starting AI Analysis...
+22:48:22 - Using 24h cached analysis for HIFK vs KalPa
+22:48:22 - Using 24h cached analysis for Kalmar HC vs Södertälje SK
+22:48:22 - Using 24h cached analysis for Frölunda HC vs Luleå HF
+22:48:22 - Using 24h cached analysis for Iowa Hawkeyes vs Virginia Cavaliers
+22:48:22 - Using 24h cached analysis for Skellefteå AIK vs Malmö Redhawks
+22:48:22 - Finished AI analysis for upcoming.
+22:51:06 - Fetching odds for upcoming...
+22:51:06 - Retrieved 16 matches from Odds API. Starting AI Analysis...
+22:51:06 - Using 24h cached analysis for HIFK vs KalPa
+22:51:06 - Using 24h cached analysis for Kalmar HC vs Södertälje SK
+22:51:06 - Using 24h cached analysis for Frölunda HC vs Luleå HF
+22:51:06 - Using 24h cached analysis for Iowa Hawkeyes vs Virginia Cavaliers
+22:51:06 - Using 24h cached analysis for Skellefteå AIK vs Malmö Redhawks
+22:51:06 - Finished AI analysis for upcoming.
+10:48:11 - Fetching odds for upcoming...
+10:48:12 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/upcoming/odds?apiKey=877e65619c0ebc08e7ea216f89fdcd60&regions=eu&markets=h2h%2Ctotals%2Cspreads&oddsFormat=decimal "HTTP/1.1 200 OK"
+10:48:12 - Retrieved 8 matches from Odds API. Starting AI Analysis...
+10:48:12 - Preparing prompt and historical data for Sebastian Korda...
+10:48:12 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+10:48:19 - Failed to download data: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1032)>
+10:48:19 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+10:53:40 - Failed to download data: <urlopen error [WinError 10060] Baðlanýlan uygun olarak belli bir süre içinde yanýt vermediðinden veya kurulan
+baðlantý baðlanýlan ana bilgisayar yanýt vermediðinden bir baðlantý kurulamadý>
+10:53:40 - Gemini AI analyzing: Sebastian Korda vs Martin Landaluce
+10:53:40 - Preparing prompt and historical data for Jiri Lehecka...
+10:53:40 - AFC is enabled with max remote calls: 10.
+10:53:40 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+10:53:55 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:57:49 - Failed to download data: <urlopen error [WinError 10060] Baðlanýlan uygun olarak belli bir süre içinde yanýt vermediðinden veya kurulan
+baðlantý baðlanýlan ana bilgisayar yanýt vermediðinden bir baðlantý kurulamadý>
+10:57:49 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+10:58:10 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+10:58:10 - Gemini AI analyzing: Jiri Lehecka vs Taylor Fritz
+10:58:10 - Preparing prompt and historical data for Valentin Vacherot...
+10:58:10 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+10:58:10 - AFC is enabled with max remote calls: 10.
+10:58:21 - Failed to download data: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1032)>
+10:58:21 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+10:58:21 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:58:26 - Failed to download data: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1032)>
+10:58:26 - Gemini AI analyzing: Valentin Vacherot vs Arthur Fils
+10:58:26 - Using 24h cached analysis for HIFK vs KalPa
+10:58:26 - Preparing prompt and historical data for HPK...
+10:58:26 - AFC is enabled with max remote calls: 10.
+10:58:26 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+10:58:40 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+11:02:09 - Failed to download data: <urlopen error [WinError 10060] Baðlanýlan uygun olarak belli bir süre içinde yanýt vermediðinden veya kurulan
+baðlantý baðlanýlan ana bilgisayar yanýt vermediðinden bir baðlantý kurulamadý>
+11:02:09 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:05:34 - Background resolver task started.
+11:05:34 - No pending bets to resolve.
+11:05:46 - Background resolver task started.
+11:05:46 - No pending bets to resolve.
+11:06:18 - Failed to download data: <urlopen error [WinError 10060] Baðlanýlan uygun olarak belli bir süre içinde yanýt vermediðinden veya kurulan
+baðlantý baðlanýlan ana bilgisayar yanýt vermediðinden bir baðlantý kurulamadý>
+11:06:18 - Gemini AI analyzing: HPK vs Lukko
+11:06:18 - AFC is enabled with max remote calls: 10.
+11:06:18 - Fetching odds for upcoming...
+11:06:18 - Retrieved 8 matches from Odds API. Starting AI Analysis...
+11:06:18 - Fetching odds for upcoming...
+11:06:18 - Retrieved 8 matches from Odds API. Starting AI Analysis...
+11:06:18 - Fetching odds for upcoming...
+11:06:18 - Retrieved 8 matches from Odds API. Starting AI Analysis...
+11:06:18 - Fetching odds for upcoming...
+11:06:18 - Retrieved 8 matches from Odds API. Starting AI Analysis...
+11:06:18 - Fetching odds for upcoming...
+11:06:18 - Retrieved 8 matches from Odds API. Starting AI Analysis...
+11:06:18 - Fetching odds for upcoming...
+11:06:18 - Retrieved 8 matches from Odds API. Starting AI Analysis...
+11:06:18 - Fetching odds for upcoming...
+11:06:18 - Retrieved 8 matches from Odds API. Starting AI Analysis...
+11:06:18 - Fetching odds for upcoming...
+11:06:18 - Retrieved 8 matches from Odds API. Starting AI Analysis...
+11:06:18 - Fetching odds for upcoming...
+11:06:18 - Retrieved 8 matches from Odds API. Starting AI Analysis...
+11:06:18 - Fetching odds for upcoming...
+11:06:18 - Retrieved 8 matches from Odds API. Starting AI Analysis...
+11:06:18 - Using 24h cached analysis for Sebastian Korda vs Martin Landaluce
+11:06:18 - Using 24h cached analysis for Jiri Lehecka vs Taylor Fritz
+11:06:18 - Using 24h cached analysis for Valentin Vacherot vs Arthur Fils
+11:06:18 - Using 24h cached analysis for HIFK vs KalPa
+11:06:18 - Preparing prompt and historical data for HPK...
+11:06:18 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:06:26 - Fetching odds for upcoming...
+11:06:28 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/upcoming/odds?apiKey=877e65619c0ebc08e7ea216f89fdcd60&regions=eu&markets=h2h%2Ctotals%2Cspreads&oddsFormat=decimal "HTTP/1.1 200 OK"
+11:06:28 - Retrieved 8 matches from Odds API. Starting AI Analysis...
+11:06:28 - Preparing prompt and historical data for Sebastian Korda...
+11:06:28 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:06:28 - Failed to download data: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1032)>
+11:06:28 - Gemini AI analyzing: Sebastian Korda vs Martin Landaluce
+11:06:28 - AFC is enabled with max remote calls: 10.
+11:06:28 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+11:06:38 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+11:06:38 - Preparing prompt and historical data for Jiri Lehecka...
+11:06:38 - Gemini AI analyzing: Jiri Lehecka vs Taylor Fritz
+11:06:38 - AFC is enabled with max remote calls: 10.
+11:06:51 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+11:06:51 - YENI SANAL BAHIS: Jiri Lehecka vs Taylor Fritz -> AWAY_SPREAD (1.95)
+11:06:51 - Preparing prompt and historical data for Valentin Vacherot...
+11:06:51 - Gemini AI analyzing: Valentin Vacherot vs Arthur Fils
+11:06:51 - AFC is enabled with max remote calls: 10.
+11:07:05 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+11:07:05 - Using 24h cached analysis for HIFK vs KalPa
+11:07:05 - Preparing prompt and historical data for HPK...
+11:07:05 - Gemini AI analyzing: HPK vs Lukko
+11:07:05 - AFC is enabled with max remote calls: 10.
+11:07:14 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+11:07:14 - Finished AI analysis for upcoming.
+11:10:29 - Failed to download data: <urlopen error [WinError 10060] Baðlanýlan uygun olarak belli bir süre içinde yanýt vermediðinden veya kurulan
+baðlantý baðlanýlan ana bilgisayar yanýt vermediðinden bir baðlantý kurulamadý>
+11:10:29 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:10:50 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+11:10:50 - Gemini AI analyzing: HPK vs Lukko
+11:10:50 - Using 24h cached analysis for Sebastian Korda vs Martin Landaluce
+11:10:50 - Using 24h cached analysis for Jiri Lehecka vs Taylor Fritz
+11:10:50 - Using 24h cached analysis for Valentin Vacherot vs Arthur Fils
+11:10:50 - AFC is enabled with max remote calls: 10.
+11:10:50 - Using 24h cached analysis for HIFK vs KalPa
+11:10:50 - Preparing prompt and historical data for HPK...
+11:10:50 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:11:03 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+11:11:11 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+11:11:11 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:11:21 - Background resolver task started.
+11:11:21 - Checking scores for sport: tennis_atp_miami_open
+11:11:22 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/tennis_atp_miami_open/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+11:11:32 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+11:11:32 - Gemini AI analyzing: HPK vs Lukko
+11:11:32 - AFC is enabled with max remote calls: 10.
+11:11:32 - Using 24h cached analysis for Sebastian Korda vs Martin Landaluce
+11:11:32 - Using 24h cached analysis for Jiri Lehecka vs Taylor Fritz
+11:11:32 - Using 24h cached analysis for Valentin Vacherot vs Arthur Fils
+11:11:32 - Using 24h cached analysis for HIFK vs KalPa
+11:11:32 - Preparing prompt and historical data for HPK...
+11:11:32 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:11:40 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+11:11:53 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+11:11:53 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:12:14 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+11:12:14 - Gemini AI analyzing: HPK vs Lukko
+11:12:14 - AFC is enabled with max remote calls: 10.
+11:12:14 - Using 24h cached analysis for Sebastian Korda vs Martin Landaluce
+11:12:14 - Using 24h cached analysis for Jiri Lehecka vs Taylor Fritz
+11:12:14 - Using 24h cached analysis for Valentin Vacherot vs Arthur Fils
+11:12:14 - Using 24h cached analysis for HIFK vs KalPa
+11:12:14 - Preparing prompt and historical data for HPK...
+11:12:14 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:12:22 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+11:12:35 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+11:12:35 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:12:45 - Failed to download data: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1032)>
+11:12:45 - Gemini AI analyzing: HPK vs Lukko
+11:12:45 - Using 24h cached analysis for Sebastian Korda vs Martin Landaluce
+11:12:45 - AFC is enabled with max remote calls: 10.
+11:12:45 - Using 24h cached analysis for Jiri Lehecka vs Taylor Fritz
+11:12:45 - Using 24h cached analysis for Valentin Vacherot vs Arthur Fils
+11:12:45 - Using 24h cached analysis for HIFK vs KalPa
+11:12:45 - Preparing prompt and historical data for HPK...
+11:12:45 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:12:55 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+11:13:06 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+11:13:06 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:13:27 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+11:13:27 - Gemini AI analyzing: HPK vs Lukko
+11:13:27 - Using 24h cached analysis for Sebastian Korda vs Martin Landaluce
+11:13:27 - Using 24h cached analysis for Jiri Lehecka vs Taylor Fritz
+11:13:27 - Using 24h cached analysis for Valentin Vacherot vs Arthur Fils
+11:13:27 - Using 24h cached analysis for HIFK vs KalPa
+11:13:27 - Preparing prompt and historical data for HPK...
+11:13:27 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:13:27 - AFC is enabled with max remote calls: 10.
+11:13:37 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+11:13:48 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+11:13:48 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:13:51 - Failed to download data: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1032)>
+11:13:51 - Gemini AI analyzing: HPK vs Lukko
+11:13:51 - Using 24h cached analysis for Sebastian Korda vs Martin Landaluce
+11:13:51 - AFC is enabled with max remote calls: 10.
+11:13:51 - Using 24h cached analysis for Jiri Lehecka vs Taylor Fritz
+11:13:51 - Using 24h cached analysis for Valentin Vacherot vs Arthur Fils
+11:13:51 - Using 24h cached analysis for HIFK vs KalPa
+11:13:51 - Preparing prompt and historical data for HPK...
+11:13:51 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:14:00 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+11:14:12 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+11:14:12 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:14:16 - Failed to download data: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1032)>
+11:14:16 - Gemini AI analyzing: HPK vs Lukko
+11:14:16 - Using 24h cached analysis for Sebastian Korda vs Martin Landaluce
+11:14:16 - Using 24h cached analysis for Jiri Lehecka vs Taylor Fritz
+11:14:16 - Using 24h cached analysis for Valentin Vacherot vs Arthur Fils
+11:14:16 - AFC is enabled with max remote calls: 10.
+11:14:16 - Using 24h cached analysis for HIFK vs KalPa
+11:14:16 - Preparing prompt and historical data for HPK...
+11:14:16 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:14:27 - Failed to download data: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1032)>
+11:14:27 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:14:27 - Failed to download data: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1032)>
+11:14:27 - Gemini AI analyzing: HPK vs Lukko
+11:14:27 - AFC is enabled with max remote calls: 10.
+11:14:27 - Using 24h cached analysis for Sebastian Korda vs Martin Landaluce
+11:14:27 - Using 24h cached analysis for Jiri Lehecka vs Taylor Fritz
+11:14:27 - Using 24h cached analysis for Valentin Vacherot vs Arthur Fils
+11:14:27 - Using 24h cached analysis for HIFK vs KalPa
+11:14:27 - Preparing prompt and historical data for HPK...
+11:14:27 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:14:28 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+11:14:38 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+11:14:48 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+11:14:48 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:15:05 - Failed to download data: <urlopen error [WinError 10054] Varolan bir baðlantý uzaktaki bir ana bilgisayar tarafýndan zorla kapatýldý>
+11:15:05 - Gemini AI analyzing: HPK vs Lukko
+11:15:05 - Using 24h cached analysis for Sebastian Korda vs Martin Landaluce
+11:15:05 - Using 24h cached analysis for Jiri Lehecka vs Taylor Fritz
+11:15:05 - AFC is enabled with max remote calls: 10.
+11:15:05 - Using 24h cached analysis for Valentin Vacherot vs Arthur Fils
+11:15:05 - Using 24h cached analysis for HIFK vs KalPa
+11:15:05 - Preparing prompt and historical data for HPK...
+11:15:05 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:15:09 - Failed to download data: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1032)>
+11:15:09 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:15:15 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+11:15:30 - Failed to download data: <urlopen error [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi>
+11:15:30 - Gemini AI analyzing: HPK vs Lukko
+11:15:30 - AFC is enabled with max remote calls: 10.
+11:15:31 - Finished AI analysis for upcoming.
+11:15:31 - Finished AI analysis for upcoming.
+11:15:31 - Finished AI analysis for upcoming.
+11:15:31 - Finished AI analysis for upcoming.
+11:15:31 - Finished AI analysis for upcoming.
+11:15:31 - Finished AI analysis for upcoming.
+11:15:31 - Finished AI analysis for upcoming.
+11:15:31 - Finished AI analysis for upcoming.
+11:15:31 - Finished AI analysis for upcoming.
+11:15:31 - Finished AI analysis for upcoming.
+11:15:42 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+11:15:42 - Finished AI analysis for upcoming.
+11:16:52 - Background resolver task started.
+11:16:52 - Checking scores for sport: tennis_atp_miami_open
+11:16:53 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/tennis_atp_miami_open/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+11:17:22 - Background resolver task started.
+11:17:22 - Checking scores for sport: tennis_atp_miami_open
+11:17:23 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/tennis_atp_miami_open/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+11:17:30 - Background resolver task started.
+11:17:30 - Checking scores for sport: tennis_atp_miami_open
+11:17:31 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/tennis_atp_miami_open/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+11:18:42 - Background resolver task started.
+11:18:42 - Checking scores for sport: tennis_atp_miami_open
+11:18:43 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/tennis_atp_miami_open/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+11:19:34 - Fetching odds for upcoming...
+11:19:35 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/upcoming/odds?apiKey=877e65619c0ebc08e7ea216f89fdcd60&regions=eu&markets=h2h%2Ctotals%2Cspreads&oddsFormat=decimal "HTTP/1.1 200 OK"
+11:19:35 - Retrieved 1 relevant matches. Starting AI Analysis...
+11:19:35 - Preparing prompt and historical data for Maccabi Tel Aviv...
+11:19:35 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:19:45 - Failed to download data: [WinError 10051] Bir yuva iþlemi eriþilemeyen bir að için denendi
+11:19:45 - Gemini AI (gemini-1.5-flash) analyzing: Maccabi Tel Aviv vs Fenerbahce SK
+11:19:45 - AFC is enabled with max remote calls: 10.
+11:19:45 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent "HTTP/1.1 404 Not Found"
+11:19:45 - Gemini API Error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+11:19:45 - Finished AI analysis for upcoming.
+11:20:29 - Fetching odds for upcoming...
+11:20:29 - Retrieved 1 relevant matches. Starting AI Analysis...
+11:20:29 - Preparing prompt and historical data for Maccabi Tel Aviv...
+11:20:29 - Gemini AI (gemini-1.5-flash) analyzing: Maccabi Tel Aviv vs Fenerbahce SK
+11:20:29 - AFC is enabled with max remote calls: 10.
+11:20:29 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent "HTTP/1.1 404 Not Found"
+11:20:29 - Gemini API Error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+11:20:29 - Finished AI analysis for upcoming.
+11:21:28 - Background resolver task started.
+11:21:28 - Checking scores for sport: tennis_atp_miami_open
+11:21:29 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/tennis_atp_miami_open/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+11:21:53 - Fetching odds for upcoming...
+11:21:53 - Retrieved 1 relevant matches. Starting AI Analysis...
+11:21:53 - Preparing prompt and historical data for Maccabi Tel Aviv...
+11:21:53 - Gemini AI (gemini-1.5-flash) analyzing: Maccabi Tel Aviv vs Fenerbahce SK
+11:21:53 - AFC is enabled with max remote calls: 10.
+11:21:53 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent "HTTP/1.1 404 Not Found"
+11:21:53 - Gemini API Error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+11:21:53 - Finished AI analysis for upcoming.
+11:21:54 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/tennis_atp_miami_open/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+11:25:53 - Background resolver task started.
+11:25:53 - No pending bets to resolve.
+11:26:12 - Background resolver task started.
+11:26:12 - No pending bets to resolve.
+11:26:25 - Background resolver task started.
+11:26:25 - No pending bets to resolve.
+11:26:34 - Background resolver task started.
+11:26:34 - No pending bets to resolve.
+11:27:21 - Background resolver task started.
+11:27:21 - No pending bets to resolve.
+11:28:14 - Fetching odds for upcoming...
+11:28:14 - Retrieved 1 relevant matches. Starting AI Analysis...
+11:28:14 - Preparing prompt and historical data for Maccabi Tel Aviv...
+11:28:14 - Gemini AI (gemini-1.5-flash) analyzing: Maccabi Tel Aviv vs Fenerbahce SK
+11:28:14 - AFC is enabled with max remote calls: 10.
+11:28:14 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent "HTTP/1.1 404 Not Found"
+11:28:14 - Gemini API Error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+11:28:14 - Finished AI analysis for upcoming.
+11:29:30 - Background resolver task started.
+11:29:30 - No pending bets to resolve.
+11:29:30 - Background resolver task started.
+11:29:30 - No pending bets to resolve.
+11:29:41 - Background resolver task started.
+11:29:41 - No pending bets to resolve.
+11:29:46 - Fetching odds for upcoming...
+11:29:48 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/upcoming/odds?apiKey=877e65619c0ebc08e7ea216f89fdcd60&regions=eu&markets=h2h%2Ctotals%2Cspreads&oddsFormat=decimal "HTTP/1.1 200 OK"
+11:29:48 - Retrieved 1 relevant matches. Starting AI Analysis...
+11:29:48 - Preparing prompt and historical data for Maccabi Tel Aviv...
+11:29:48 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:30:05 - Failed to download data: _ssl.c:1015: The handshake operation timed out
+11:30:05 - Gemini AI (gemini-2.5-flash) analyzing (Attempt 1): Maccabi Tel Aviv vs Fenerbahce SK
+11:30:05 - AFC is enabled with max remote calls: 10.
+11:30:22 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+11:30:22 - Finished AI analysis for upcoming.
+11:32:53 - Background resolver task started.
+11:32:53 - No pending bets to resolve.
+11:32:54 - Background resolver task started.
+11:32:54 - No pending bets to resolve.
+11:33:02 - Background resolver task started.
+11:33:02 - No pending bets to resolve.
+11:33:02 - Background resolver task started.
+11:33:02 - No pending bets to resolve.
+11:33:32 - Background resolver task started.
+11:33:32 - No pending bets to resolve.
+11:33:33 - Background resolver task started.
+11:33:33 - No pending bets to resolve.
+11:33:46 - Background resolver task started.
+11:33:46 - No pending bets to resolve.
+11:37:50 - Background resolver task started.
+11:37:50 - No pending bets to resolve.
+11:37:50 - Background resolver task started.
+11:37:50 - No pending bets to resolve.
+11:37:58 - Background resolver task started.
+11:37:58 - No pending bets to resolve.
+11:37:58 - Background resolver task started.
+11:37:58 - No pending bets to resolve.
+11:38:46 - Background resolver task started.
+11:38:46 - No pending bets to resolve.
+11:39:22 - Fetching odds for upcoming...
+11:39:23 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/upcoming/odds?apiKey=877e65619c0ebc08e7ea216f89fdcd60&regions=eu&markets=h2h%2Ctotals%2Cspreads&oddsFormat=decimal "HTTP/1.1 200 OK"
+11:39:23 - Retrieved 2 relevant matches. Starting AI Analysis...
+11:39:23 - Using 24h cached analysis for Maccabi Tel Aviv vs Fenerbahce SK
+11:39:23 - Preparing prompt and historical data for VfL Wolfsburg...
+11:39:23 - Downloading historical data from https://www.football-data.co.uk/mmz4281/2324/E0.csv...
+11:39:56 - Failed to download data: _ssl.c:1015: The handshake operation timed out
+11:39:56 - Gemini AI (gemini-2.5-flash) analyzing (Attempt 1): VfL Wolfsburg vs Lyon
+11:39:56 - AFC is enabled with max remote calls: 10.
+11:40:17 - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+11:40:17 - YENI SANAL BAHIS: VfL Wolfsburg vs Lyon -> OVER_3.5 (1.98)
+11:40:17 - Finished AI analysis for upcoming.
+11:43:08 - Background resolver task started.
+11:43:08 - Checking scores for sport: soccer_uefa_champs_league_women
+11:43:08 - Background resolver task started.
+11:43:08 - Checking scores for sport: soccer_uefa_champs_league_women
+11:43:10 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+11:43:10 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+11:50:21 - Background resolver task started.
+11:50:21 - Checking scores for sport: soccer_uefa_champs_league_women
+11:50:22 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+11:50:31 - Background resolver task started.
+11:50:31 - Background resolver task started.
+11:50:31 - Checking scores for sport: soccer_uefa_champs_league_women
+11:50:31 - Checking scores for sport: soccer_uefa_champs_league_women
+11:50:32 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+11:50:32 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+11:50:46 - Background resolver task started.
+11:50:46 - Checking scores for sport: soccer_uefa_champs_league_women
+11:50:46 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+11:51:15 - Fetching odds for upcoming...
+11:51:16 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/upcoming/odds?apiKey=877e65619c0ebc08e7ea216f89fdcd60&regions=eu&markets=h2h%2Ctotals%2Cspreads&oddsFormat=decimal "HTTP/1.1 200 OK"
+11:51:16 - Retrieved 2 relevant matches. Starting AI Analysis...
+11:51:16 - Using 24h cached analysis for Maccabi Tel Aviv vs Fenerbahce SK
+11:51:16 - Using 24h cached analysis for VfL Wolfsburg vs Lyon
+11:51:16 - Finished AI analysis for upcoming.
+11:51:55 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+12:13:10 - Checking scores for sport: soccer_uefa_champs_league_women
+12:13:40 - Background resolver task started.
+12:13:40 - Checking scores for sport: soccer_uefa_champs_league_women
+12:13:42 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+12:13:59 - Fetching odds for upcoming...
+12:13:59 - Retrieved 2 relevant matches. Starting AI Analysis...
+12:13:59 - Using 24h cached analysis for Maccabi Tel Aviv vs Fenerbahce SK
+12:13:59 - Using 24h cached analysis for VfL Wolfsburg vs Lyon
+12:13:59 - Finished AI analysis for upcoming.
+12:17:21 - Background resolver task started.
+12:17:21 - Background resolver task started.
+12:17:21 - Checking scores for sport: soccer_uefa_champs_league_women
+12:17:21 - Checking scores for sport: soccer_uefa_champs_league_women
+12:17:22 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+12:17:22 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+12:18:18 - Background resolver task started.
+12:18:18 - Checking scores for sport: soccer_uefa_champs_league_women
+12:18:19 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+12:19:50 - Fetching odds for upcoming...
+12:19:51 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/upcoming/odds?apiKey=877e65619c0ebc08e7ea216f89fdcd60&regions=eu&markets=h2h%2Ctotals%2Cspreads&oddsFormat=decimal "HTTP/1.1 200 OK"
+12:19:51 - Retrieved 2 relevant matches. Starting AI Analysis...
+12:19:51 - Using 24h cached analysis for Maccabi Tel Aviv vs Fenerbahce SK
+12:19:51 - Using 24h cached analysis for VfL Wolfsburg vs Lyon
+12:19:51 - Finished AI analysis for upcoming.
+12:19:58 - Fetching odds for upcoming...
+12:19:58 - Retrieved 2 relevant matches. Starting AI Analysis...
+12:19:58 - Using 24h cached analysis for Maccabi Tel Aviv vs Fenerbahce SK
+12:19:58 - Using 24h cached analysis for VfL Wolfsburg vs Lyon
+12:19:58 - Finished AI analysis for upcoming.
+12:20:46 - Checking scores for sport: soccer_uefa_champs_league_women
+12:21:51 - Background resolver task started.
+12:21:51 - Background resolver task started.
+12:21:51 - Checking scores for sport: soccer_uefa_champs_league_women
+12:21:51 - Checking scores for sport: soccer_uefa_champs_league_women
+12:21:53 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+12:21:53 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+12:22:20 - Background resolver task started.
+12:22:20 - Checking scores for sport: soccer_uefa_champs_league_women
+12:22:20 - Background resolver task started.
+12:22:20 - Checking scores for sport: soccer_uefa_champs_league_women
+12:22:21 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+12:22:21 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+12:23:00 - Background resolver task started.
+12:23:00 - Checking scores for sport: soccer_uefa_champs_league_women
+12:23:01 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+12:23:31 - Fetching odds for upcoming...
+12:23:33 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/upcoming/odds?apiKey=877e65619c0ebc08e7ea216f89fdcd60&regions=eu&markets=h2h%2Ctotals%2Cspreads&oddsFormat=decimal "HTTP/1.1 200 OK"
+12:25:01 - Background resolver task started.
+12:25:01 - Checking scores for sport: soccer_uefa_champs_league_women
+12:25:01 - Background resolver task started.
+12:25:01 - Checking scores for sport: soccer_uefa_champs_league_women
+12:25:02 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+12:25:02 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+12:25:02 - Background resolver task started.
+12:25:02 - Checking scores for sport: soccer_uefa_champs_league_women
+12:25:03 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+12:25:50 - Background resolver task started.
+12:25:50 - Checking scores for sport: soccer_uefa_champs_league_women
+12:25:51 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+12:26:13 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/basketball/odds?apiKey=877e65619c0ebc08e7ea216f89fdcd60&regions=eu&markets=h2h%2Ctotals%2Cspreads&oddsFormat=decimal "HTTP/1.1 200 OK"
+12:26:13 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer/odds?apiKey=877e65619c0ebc08e7ea216f89fdcd60&regions=eu&markets=h2h%2Ctotals%2Cspreads&oddsFormat=decimal "HTTP/1.1 200 OK"
+12:28:00 - Background resolver task started.
+12:28:00 - Checking scores for sport: soccer_uefa_champs_league_women
+12:28:01 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+12:31:32 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/basketball/odds?apiKey=877e65619c0ebc08e7ea216f89fdcd60&regions=eu&markets=h2h%2Ctotals%2Cspreads&oddsFormat=decimal "HTTP/1.1 200 OK"
+12:31:32 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer/odds?apiKey=877e65619c0ebc08e7ea216f89fdcd60&regions=eu&markets=h2h%2Ctotals%2Cspreads&oddsFormat=decimal "HTTP/1.1 200 OK"
+12:51:56 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"
+12:55:02 - Checking scores for sport: soccer_uefa_champs_league_women
+12:55:03 - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_women/scores?apiKey=877e65619c0ebc08e7ea216f89fdcd60&daysFrom=1 "HTTP/1.1 200 OK"

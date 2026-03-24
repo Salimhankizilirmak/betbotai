@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BetBot AI | Baron Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        
+        <!-- Sidebar -->
+        <aside class="sidebar glass-panel">
+            <div class="logo">
+                <i class="fa-solid fa-bolt"></i>
+                <span>BetBot AI</span>
+            </div>
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" data-page="page-live"><i class="fa-solid fa-satellite-dish"></i> Live Feed</a>
+                <a href="#" class="nav-item" data-page="page-upcoming"><i class="fa-solid fa-calendar-days"></i> Upcoming</a>
+                <a href="#" class="nav-item" data-page="page-predictions"><i class="fa-solid fa-chart-line"></i> AI Predictions</a>
+                <a href="#" class="nav-item" data-page="page-settings"><i class="fa-solid fa-gear"></i> Settings</a>
+            </nav>
+            <div class="user-info">
+                <div class="balance">
+                    <span class="label">Baron Kasa</span>
+                    <span class="amount" id="baron-balance"><i class="fa-solid fa-coins"></i> 10,000.00 BB</span>
+                    <div id="pending-balance" style="font-size: 10px; color: var(--text-secondary); margin-top: 4px;"></div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header glass-panel">
+                <div class="search-bar">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" placeholder="Search matches, leagues...">
+                </div>
+                <div class="header-actions">
+                    <button class="icon-btn" id="refresh-btn" title="Manuel Analiz Yenile"><i class="fa-solid fa-rotate-right"></i></button>
+                    <button class="icon-btn"><i class="fa-regular fa-bell"></i></button>
+                    <div class="profile-pic">
+                        <img src="https://ui-avatars.com/api/?name=Baron&background=10b981&color=fff" alt="User">
+                    </div>
+                </div>
+            </header>
+
+            <!-- LIVE FEED PAGE -->
+            <div id="page-live" class="page-view active-page">
+                <div class="stats-row">
+                    <div class="stat-card glass-panel">
+                        <div class="stat-icon"><i class="fa-solid fa-crosshairs"></i></div>
+                        <div class="stat-details">
+                            <h3>Tracked Matches</h3>
+                            <p id="live-count">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card glass-panel">
+                        <div class="stat-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981"><i class="fa-solid fa-check-double"></i></div>
+                        <div class="stat-details">
+                            <h3>AI Accuracy</h3>
+                            <p>87.4%</p>
+                        </div>
+                    </div>
+                    <div class="stat-card glass-panel">
+                        <div class="stat-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b"><i class="fa-solid fa-arrow-trend-up"></i></div>
+                        <div class="stat-details">
+                            <h3>Baron ROI</h3>
+                            <p>+420%</p>
+                        </div>
+                    </div>
+                </div>
+
+                <section class="logs-section">
+                    <div class="terminal-window">
+                        <div class="terminal-header">
+                            <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                            <div class="terminal-title">System Analysis Logs</div>
+                        </div>
+                        <div class="terminal-body" id="log-body">
+                            > Booting BetBot Core...
+                        </div>
+                    </div>
+                </section>
+
+                <section class="matches-section">
+                    <div class="section-title">
+                        <h2><i class="fa-solid fa-fire"></i> Hot AI Recommendations</h2>
+                    </div>
+                    <div class="matches-grid" id="matches-grid">
+                        <div class="loading-spinner">
+                            <i class="fa-solid fa-circle-notch fa-spin"></i> Analyzing live data...
+                        </div>
+                    </div>
+                </section>
+
+                <!-- NBA Player Props Section -->
+                <section class="matches-section" style="margin-top: 30px;">
+                    <div class="section-title" style="display:flex; align-items:center; gap:10px;">
+                        <h2><i class="fa-solid fa-basketball" style="color:#f59e0b"></i> NBA Oyuncu Prop Tahminleri</h2>
+                        <span style="background: rgba(245,158,11,0.15); color:#f59e0b; padding: 3px 10px; border-radius: 20px; font-size:11px; font-weight:600;">PATLAMA RADAR 🔥</span>
+                    </div>
+                    <p style="color:var(--text-secondary); font-size:13px; margin-bottom:15px;">
+                        Son 3 maçta hattın altında kalan oyuncular — patlama bekleniyor analizi.
+                    </p>
+                    <div id="player-props-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px;">
+                        <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> NBA oyuncu verileri analiz ediliyor...</div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- UPCOMING PAGE -->
+            <div id="page-upcoming" class="page-view" style="display: none;">
+                <h2><i class="fa-solid fa-calendar-days"></i> Gelecek Maçlar (Upcoming)</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 20px;">Gelecek 24 saat içindeki maçlar ve ön analiz durumları.</p>
+                
+                <div class="matches-grid" id="upcoming-grid">
+                    <div class="loading-spinner">
+                        <i class="fa-solid fa-circle-notch fa-spin"></i> Gelecek bülten analiz ediliyor...
+                    </div>
+                </div>
+            </div>
+
+            <!-- PREDICTIONS PAGE -->
+            <div id="page-predictions" class="page-view" style="display: none;">
+                <h2><i class="fa-solid fa-chart-line"></i> AI Tahminleri & Baron ROI</h2>
+                
+                <div class="glass-panel chart-container" style="padding: 20px; margin-top:20px; position:relative; height:300px;">
+                    <canvas id="roiChart"></canvas>
+                </div>
+
+                <div class="history-list" id="history-list" style="margin-top:20px;">
+                    <!-- JS ile dolacak -->
+                </div>
+            </div>
+
+            <!-- SETTINGS PAGE -->
+            <div id="page-settings" class="page-view" style="display: none;">
+                <h2><i class="fa-solid fa-gear"></i> Ayarlar & API Yapılandırması</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 20px;">BetBot'un beyin bağlantılarını ve limitlerini yapılandırın.</p>
+                
+                <div class="glass-panel" style="padding: 30px; max-width: 600px;">
+                    <div class="form-group">
+                        <label>Gemini API Key (Yapay Zeka Motoru)</label>
+                        <input type="password" value="AIzaSyCD86sWPIUdTHJI2N4deLSeiGfbFqgaYJg" class="settings-input" readonly>
+                        <small style="color:var(--text-secondary); font-size:12px; margin-top:5px; display:block;">Güncel kotalı API anahtarınız aktif.</small>
+                    </div>
+                    
+                    <div class="form-group" style="margin-top:20px;">
+                        <label>The Odds API Key (Veri Sağlayıcı)</label>
+                        <input type="password" value="877e65619c0ebc08e7ea216f89fdcd60" class="settings-input" readonly>
+                        <small style="color:var(--text-secondary); font-size:12px; margin-top:5px; display:block;">Oranlar ve canlı skorlar çekiliyor (Aylık 500 İstek).</small>
+                    </div>
+
+                    <div class="form-group" style="margin-top:20px;">
+                        <label>AI Agresiflik Profil Seçimi</label>
+                        <select class="settings-input">
+                            <option>Dengeli (Sadece Garantili Maçlar)</option>
+                            <option>Agresif (Yüksek Oranlı Sürprizler)</option>
+                            <option>Baron Modu (Maximum Risk / Kazanç)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="margin-top:20px;">
+                        <label>Önbellek (Cache) Temizle</label>
+                        <button class="action-btn" style="background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); padding: 10px 15px; border-radius: 5px; cursor:pointer;" onclick="alert('Önbellek başarıyla temizlendi!')">
+                            <i class="fa-solid fa-trash"></i> 24 Saatlik AI Hafızasını Sil
+                        </button>
+                    </div>
+                    
+                    <button class="action-btn" style="margin-top:30px; padding:12px 25px; background:var(--accent-primary); border:none; border-radius:5px; color:white; cursor:pointer; font-weight:bold; width: 100%;">
+                        Ayarları Kaydet
+                    </button>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- AI Analysis Modal -->
+    <div id="analysis-modal" class="modal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; overflow:auto; background-color:rgba(15,23,42,0.9); backdrop-filter:blur(5px);">
+        <div class="modal-content glass-panel" style="margin:5% auto; padding:20px; border-radius:16px; width:80%; max-width:800px; color:white; border-top:4px solid var(--accent-primary);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">
+                <h3 style="margin:0;"><i class="fa-solid fa-brain"></i> Baron AI Raporı</h3>
+                <span class="close" onclick="closeModal()" style="color:#aaa; font-size:28px; font-weight:bold; cursor:pointer;">&times;</span>
+            </div>
+            <div id="modal-analysis-content"></div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
