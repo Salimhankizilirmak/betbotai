@@ -234,7 +234,7 @@ async function fetchLogs() {
 let balancePoller = null;
 async function fetchBetHistory() {
     try {
-        const res = await fetch(`${API_BASE_URL}/api/bets/history`);
+        const res = await fetch(`${API_BASE_URL}/api/bets/history?t=${Date.now()}`);
         if(res.ok) {
             const data = await res.json();
             updateBalance(data.current_balance, data.profit, data.bets);
@@ -246,7 +246,11 @@ async function fetchBetHistory() {
 
 function startBalancePoller() {
     if(!balancePoller) {
-        balancePoller = setInterval(fetchBetHistory, 10000); // Poll every 10 seconds
+        balancePoller = setInterval(() => {
+            fetchBetHistory();
+            fetchMatches(true);
+            fetchPlayerProps();
+        }, 15000); // Poll every 15 seconds
     }
 }
 

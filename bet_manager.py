@@ -108,7 +108,7 @@ def place_virtual_bet(event, ai_analysis, custom_amount=None):
                 f"📈 <b>Oran:</b> {odds_value}\n"
                 f"💰 <b>Miktar:</b> {amount} BB\n\n"
                 f"🧠 <b>Baron'un Gerekçesi:</b>\n"
-                f"<i>{ai_analysis.get('explanation', '')[:300]}...</i>"
+                f"<i>{ai_analysis.get('analysis', '')[:4000]}</i>"
             )
             send_telegram_message(msg)
             
@@ -151,7 +151,19 @@ def get_recent_performance(limit=10):
         logging.error(f"Recent performance error: {e}")
         return "Performans verisi çekilemedi."
 
-def resolve_bet_status(match_id, actual_result):
+def check_bet_exists(match_id):
+    """
+    Belirli bir maç için bahis yapılıp yapılmadığını kontrol eder.
+    """
+    try:
+        with sqlite3.connect(DATABASE_FILE) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM bets WHERE match_id = ?", (match_id,))
+            return cursor.fetchone() is not None
+    except:
+        return False
+
+def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
     """
     Bahis sonucunu günceller ve kar/zarar hesaplar.
     """
@@ -167,9 +179,25 @@ def resolve_bet_status(match_id, actual_result):
             prediction, odds, amount, home, away = bet
             is_winner = False
             
-            # Basit kazanma mantığı (Geliştirilebilir)
-            if prediction == actual_result:
-                is_winner = True
+            # 1. Taraf Bahsi Kontrolü (HOME_WIN, AWAY_WIN, DRAW)
+            if prediction in ["HOME_WIN", "AWAY_WIN", "DRAW"]:
+                if prediction == winner:
+                    is_winner = True
+            
+            # 2. Alt/Üst Bahsi Kontrolü (OVER 2.5, UNDER 210.5 vb.)
+            elif h_score is not None and a_score is not None:
+                total_score = h_score + a_score
+                parts = prediction.split()
+                if len(parts) >= 2:
+                    direction = parts[0].upper() # OVER / UNDER
+                    try:
+                        point = float(parts[1])
+                        if direction == "OVER" and total_score > point:
+                            is_winner = True
+                        elif direction == "UNDER" and total_score < point:
+                            is_winner = True
+                    except:
+                        pass
             
             # Eğer API oran çekememişse (0.00) iflas etmemek için varsayılan 1.90 oran verelim
             safe_odds = odds if odds > 1.0 else 1.90

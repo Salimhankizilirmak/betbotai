@@ -25,25 +25,44 @@ def extract_real_odds(event, bet_target):
                     for out in market["outcomes"]:
                         if out["name"] == target_name:
                             return float(out["price"])
-                elif market["key"] == "totals" and "OVER" in bet_target:
-                    for out in market["outcomes"]:
-                        if out["name"] == "Over":
-                            return float(out["price"])
-                elif market["key"] == "totals" and "UNDER" in bet_target:
-                    for out in market["outcomes"]:
-                        if out["name"] == "Under":
-                            return float(out["price"])
+                elif market["key"] == "totals":
+                    # Örn: "OVER 2.5" veya "UNDER 210.5"
+                    parts = bet_target.split()
+                    if len(parts) >= 2:
+                        direction = parts[0].upper() # OVER / UNDER
+                        try:
+                            target_point = float(parts[1])
+                        except:
+                            target_point = None
+                            
+                        for out in market["outcomes"]:
+                            out_name = out["name"].upper() # Over / Under
+                            out_point = out.get("point")
+                            
+                            if out_name == direction:
+                                # Eğer AI bir barem belirttiyse ona en yakın olanı seç
+                                if target_point is not None:
+                                    if abs(out_point - target_point) < 0.1:
+                                        return float(out["price"])
+                                else:
+                                    # Barem belirtilmediyse ilk baremi al
+                                    return float(out["price"])
     except Exception:
         pass
     return 0.0
 
+from google import genai
+
+# Mevcut API Key ve Client kurulumu
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# Genişletilmiş model listesi (Kota sorunlarını aşmak için)
+# Genişletilmiş model listesi (2.0 modelleri kotaları daha geniş olabilir)
 AI_MODELS = [
-    'gemini-2.5-flash',
-    'gemini-2.5-flash-lite'
+    'gemini-flash-latest',
+    'gemini-pro-latest',
+    'gemini-2.5-flash-lite',
+    'gemini-2.0-flash'
 ]
 
 CACHE_FILE = os.path.join("data", "ai_cache.json")
@@ -114,31 +133,41 @@ Deplasman: {away_stats}
 Senin Önceki Tahmin Performansın (Öğrenmen İçin):
 {past_performance}
 
-- Yanıtını TAMAMEN VE SADECE TÜRKÇE olarak ver.
-- En çok güvendiğin KESİN bahis hedefini 'bet_target' alanına yaz (örn: "HOME_WIN", "AWAY_WIN", "DRAW", "OVER_2.5", "UNDER_2.5").
+- En çok güvendiğin KESİN bahis hedefini 'bet_target' alanına yaz. 
+- Örnekler: "HOME_WIN", "AWAY_WIN", "DRAW", "OVER 2.5" (Futbol için), "UNDER 2.5", "OVER 210.5" (Basketbol Toplam Sayı için), "UNDER 212.5".
 - 'odds_value' alanına seçtiğin hedefin json içindeki güncel bahis oranını ondalık sayı (float) olarak yaz.
+- KRİTİK: Oranı 1.35'in altında olan (1.10, 1.25 vb.) "garanti" görünen maçları önerme. Baron sadece değerli (value) maçları seçer.
 SADECE RAW JSON FORMATINDA DÖN:
 {{"risk_score": int (0-100), "win_probability": int (0-100), "bet_target": "string", "odds_value": float, "recommendation": "string", "analysis": "string"}}
 """
 
     for model_name in AI_MODELS:
+        if model_name != AI_MODELS[0]:
+            await asyncio.sleep(2) # Modeller arası kısa bekleme
+
         attempts = 0
-        max_attempts = 1 # Daha fazla model olduğu için attempt sayısını düşürelim ki hızlı dönsün
+        max_attempts = 1
         
         while attempts < max_attempts:
             try:
-                logging.info(f"Gemini AI ({model_name}) analyzing: {home_name} vs {away_name}")
+                logging.info(f"Gemini AI ({model_name}) denerken: {home_name} vs {away_name}")
                 response = await client.aio.models.generate_content(
                     model=model_name,
                     contents=prompt
                 )
                 
                 # Robust JSON Extraction
-                match = re.search(r'\{.*\}', response.text, re.DOTALL)
-                if not match:
+                try:
+                    text = response.text
+                except Exception as e:
+                    logging.error(f"AI Response Error (Safety?): {e}")
+                    raise ValueError("AI response blocked or empty")
+
+                match_json = re.search(r'\{.*\}', text, re.DOTALL)
+                if not match_json:
                     raise ValueError("JSON not found in AI response")
                 
-                analysis = json.loads(match.group())
+                analysis = json.loads(match_json.group())
                 
                 # Defensive Defaults
                 required_keys = ["risk_score", "win_probability", "bet_target", "odds_value", "recommendation", "analysis"]

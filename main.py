@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from oddsapi_client import get_odds, get_scores
 from ai_analyzer import analyze_event, AI_CACHE, save_cache
-from bet_manager import init_db, place_virtual_bet, get_bet_history, resolve_bet_status, get_pending_sports
+from bet_manager import init_db, place_virtual_bet, get_bet_history, resolve_bet_status, get_pending_sports, check_bet_exists
 from nba_player_props import analyze_nba_player_props, get_nba_event_props
 from dotenv import load_dotenv
 
@@ -136,7 +136,8 @@ def api_bet_history():
     bets = get_bet_history()
     START_BALANCE = 10000.0
     total_profit = sum(b.get("profit", 0) for b in bets if b.get("status") in ["WON", "LOST"])
-    current_balance = START_BALANCE + total_profit
+    pending_total = sum(b.get("bet_amount", 100) for b in bets if b.get("status") == "PENDING")
+    current_balance = START_BALANCE + total_profit - pending_total
     return {
         "current_balance": round(current_balance, 2),
         "profit": round(total_profit, 2),
@@ -185,7 +186,7 @@ async def background_resolver():
                                 if h_score > a_score: winner = "HOME_WIN"
                                 elif a_score > h_score: winner = "AWAY_WIN"
                                 
-                                await asyncio.to_thread(resolve_bet_status, event['id'], winner)
+                                await asyncio.to_thread(resolve_bet_status, event['id'], winner, h_score, a_score)
         except Exception as e:
             logging.error(f"Resolver error: {e}")
         await asyncio.sleep(1800)
@@ -200,27 +201,39 @@ async def background_analyzer():
             nba = await get_odds("basketball_nba")
             
             combined = []
-            if isinstance(soccer, list): combined.extend(soccer[:2])
-            if isinstance(basket, list): combined.extend(basket[:2])
-            if isinstance(nba, list): combined.extend(nba[:2])
+            if isinstance(soccer, list): combined.extend(soccer[:10])
+            if isinstance(basket, list): combined.extend(basket[:10])
+            if isinstance(nba, list): combined.extend(nba[:10])
+            
+            # Zamanı en yakın olanları önce analiz yap ki dashboard hemen dolsun
+            combined.sort(key=lambda x: x.get('commence_time', ''))
             
             count = 0
             for match in combined:
-                if match["id"] not in AI_CACHE:
-                    logging.info(f"Otonom Analiz: {match['home_team']} vs {match['away_team']}")
-                    res = await analyze_event(match)
+                match_id = match["id"]
+                exists = await asyncio.to_thread(check_bet_exists, match_id)
+                
+                if not exists:
+                    res = None
+                    if match_id in AI_CACHE:
+                        # Eğer zaten analiz edildiyse cache'den al
+                        res = AI_CACHE[match_id]
+                        logging.info(f"Cached Analiz Kullanıldı: {match['home_team']} vs {match['away_team']}")
+                    else:
+                        # Henüz analiz edilmediyse AI'ya sor
+                        logging.info(f"Otonom Analiz: {match['home_team']} vs {match['away_team']}")
+                        res = await analyze_event(match)
                     
-                    # Eğer AI sonucu geldiyse bahis sistemine gönder
-                    if res and res.get("risk_score", 100) < 65: # Eşiği 65 yaptık
+                    if res and res.get("risk_score", 100) < 40 and res.get("odds_value", 0) >= 1.35:
                         import bet_manager
                         await asyncio.to_thread(bet_manager.place_virtual_bet, match, res)
-                        
-                    count += 1
-                    await asyncio.sleep(10) # Delay and breathe
-                if count >= 3: break
+                        count += 1
+                        await asyncio.sleep(5)
+                
+                if count >= 10: break # Bir döngüde en fazla 10 bahis alsın
         except Exception as e:
             logging.error(f"Analyzer loop error: {e}")
-        await asyncio.sleep(3600) # Every hour
+        await asyncio.sleep(600) # Her 10 dakikada bir kontrol (3600'den düşürüldü)
 
 async def background_props_analyzer():
     logging.info("Background NBA props analyzer started.")
@@ -258,4 +271,6 @@ async def startup():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8005)
+    import os
+    port = int(os.environ.get("PORT", 8005))
+    uvicorn.run(app, host="0.0.0.0", port=port)
