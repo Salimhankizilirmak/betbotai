@@ -12,3 +12,5 @@ tzlocal
 certifi
 pydantic
 pydantic-settings
+nba_api
+
