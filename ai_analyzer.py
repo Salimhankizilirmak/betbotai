@@ -43,8 +43,7 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 # Genişletilmiş model listesi (Kota sorunlarını aşmak için)
 AI_MODELS = [
     'gemini-2.5-flash',
-    'gemini-2.0-flash', 
-    'gemini-flash-latest'
+    'gemini-2.5-flash-lite'
 ]
 
 CACHE_FILE = os.path.join("data", "ai_cache.json")
@@ -152,7 +151,7 @@ SADECE RAW JSON FORMATINDA DÖN:
                 analysis["win_probability"] = int(analysis.get("win_probability", 0))
                 
                 # Gerçek oranları API JSON tablosundan matematiksel olarak bularak AI'nin uydurmasını engelle
-                real_odds = extract_real_odds(event, analysis.get("bet_target", ""))
+                real_odds = extract_real_odds(match_data, analysis.get("bet_target", ""))
                 if real_odds > 1.0:
                     analysis["odds_value"] = real_odds
                 else:
@@ -165,7 +164,8 @@ SADECE RAW JSON FORMATINDA DÖN:
                 logging.error(f"AI Model {model_name} error: {e}")
                 
                 if "429" in err_msg or "quota" in err_msg:
-                    # Kota sorunu varsa beklemeden diğer modele geç
+                    # Kota sorunu varsa bir süre bekleyip sonraki modele geç
+                    await asyncio.sleep(3)
                     break 
                 else:
                     break # Diğer hatalarda da sonraki modele geç

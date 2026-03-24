@@ -46,52 +46,53 @@ async def api_upcoming(recommended: bool = False):
     """
     Tüm yaklaşan maçları veya sadece önerilenleri döner.
     """
-    try:
-        soccer = await get_odds("soccer_uefa_champs_league_women")
-        basketball = await get_odds("basketball_euroleague")
-        nba = await get_odds("basketball_nba")
-        upcoming = await get_odds("upcoming")
-        
-        all_raw = []
-        if isinstance(soccer, list): all_raw.extend(soccer)
-        if isinstance(basketball, list): all_raw.extend(basketball)
-        if isinstance(nba, list): all_raw.extend(nba)
-        if isinstance(upcoming, list): all_raw.extend(upcoming)
-        
-        seen = set()
-        unique_matches = []
-        for m in all_raw:
-            if m.get("id") and m["id"] not in seen:
-                unique_matches.append(m)
-                seen.add(m["id"])
-                
-        final_matches = []
-        default_analysis = {
-            "risk_score": 0, 
-            "win_probability": 0, 
-            "analysis": "Henüz analiz edilmedi.", 
-            "bet_target": "N/A", 
-            "odds_value": 0.0,
-            "is_recommended": False,
-            "bet_amount": 100
-        }
-        
-        for match in unique_matches:
-            analysis = AI_CACHE.get(match["id"], default_analysis)
-            match["ai_analysis"] = {**default_analysis, **analysis}
+    sports_to_fetch = [
+        "soccer_uefa_champs_league_women",
+        "basketball_euroleague",
+        "basketball_nba",
+        "upcoming"
+    ]
+    
+    all_raw = []
+    for sport in sports_to_fetch:
+        try:
+            data = await get_odds(sport)
+            if isinstance(data, list):
+                all_raw.extend(data)
+        except Exception as e:
+            logging.error(f"Error fetching odds for {sport}: {e}")
             
-            if recommended:
-                if match["ai_analysis"].get("is_recommended"):
-                    final_matches.append(match)
-            else:
+    seen = set()
+    unique_matches = []
+    for m in all_raw:
+        if m.get("id") and m["id"] not in seen:
+            unique_matches.append(m)
+            seen.add(m["id"])
+            
+    final_matches = []
+    default_analysis = {
+        "risk_score": 0, 
+        "win_probability": 0, 
+        "analysis": "Henüz analiz edilmedi.", 
+        "bet_target": "N/A", 
+        "odds_value": 0.0,
+        "is_recommended": False,
+        "bet_amount": 100
+    }
+    
+    for match in unique_matches:
+        analysis = AI_CACHE.get(match["id"], default_analysis)
+        match["ai_analysis"] = {**default_analysis, **analysis}
+        
+        if recommended:
+            if match["ai_analysis"].get("is_recommended"):
                 final_matches.append(match)
-                
-        return final_matches
-    except Exception as e:
-        logging.error(f"API Upcoming error: {e}")
-        return []
+        else:
+            final_matches.append(match)
+            
+    return final_matches
 
-@app.get("/api/analyze/{event_id}")
+@app.api_route("/api/analyze/{event_id}", methods=["GET", "POST"])
 async def api_analyze(event_id: str):
     """
     Belirli bir maç için on-demand AI analizi.
@@ -132,7 +133,15 @@ async def api_player_props():
 
 @app.get("/api/bets/history")
 def api_bet_history():
-    return get_bet_history()
+    bets = get_bet_history()
+    START_BALANCE = 10000.0
+    total_profit = sum(b.get("profit", 0) for b in bets if b.get("status") in ["WON", "LOST"])
+    current_balance = START_BALANCE + total_profit
+    return {
+        "current_balance": round(current_balance, 2),
+        "profit": round(total_profit, 2),
+        "bets": bets
+    }
 
 @app.get("/api/logs")
 def get_logs():
@@ -189,9 +198,9 @@ async def background_analyzer():
             nba = await get_odds("basketball_nba")
             
             combined = []
-            if isinstance(soccer, list): combined.extend(soccer[:5])
-            if isinstance(basket, list): combined.extend(basket[:5])
-            if isinstance(nba, list): combined.extend(nba[:10])
+            if isinstance(soccer, list): combined.extend(soccer[:2])
+            if isinstance(basket, list): combined.extend(basket[:2])
+            if isinstance(nba, list): combined.extend(nba[:2])
             
             count = 0
             for match in combined:
@@ -206,11 +215,11 @@ async def background_analyzer():
                         
 
                     count += 1
-                    await asyncio.sleep(2)
-                if count >= 4: break
+                    await asyncio.sleep(5) # Delay and breathe
+                if count >= 2: break
         except Exception as e:
             logging.error(f"Analyzer loop error: {e}")
-        await asyncio.sleep(1800) # 30 mins
+        await asyncio.sleep(3600) # Every hour
 
 async def background_props_analyzer():
     logging.info("Background NBA props analyzer started.")
