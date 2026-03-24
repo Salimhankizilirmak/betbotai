@@ -210,7 +210,7 @@ async def background_analyzer():
                 if count >= 4: break
         except Exception as e:
             logging.error(f"Analyzer loop error: {e}")
-        await asyncio.sleep(900)
+        await asyncio.sleep(1800) # 30 mins
 
 async def background_props_analyzer():
     logging.info("Background NBA props analyzer started.")
@@ -236,7 +236,7 @@ async def background_props_analyzer():
         except Exception as e:
             logging.error(f"Background props analyzer error: {e}")
         
-        await asyncio.sleep(2700) # Her 45 dakikada bir çalıştır
+        await asyncio.sleep(7200) # 2 hours
 
 @app.on_event("startup")
 async def startup():

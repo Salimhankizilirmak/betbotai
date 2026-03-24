@@ -42,12 +42,9 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 
 # Genişletilmiş model listesi (Kota sorunlarını aşmak için)
 AI_MODELS = [
+    'gemini-2.5-flash',
     'gemini-2.0-flash', 
-    'gemini-1.5-flash', 
-    'gemini-2.0-flash-lite-preview-02-05',
-    'gemini-2.5-flash', 
-    'gemini-flash-latest',
-    'gemini-2.5-pro'
+    'gemini-flash-latest'
 ]
 
 CACHE_FILE = os.path.join("data", "ai_cache.json")
