@@ -4,6 +4,9 @@ import logging
 from datetime import datetime
 import urllib.request
 import urllib.parse
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def send_telegram_message(text: str):
     token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -17,8 +20,11 @@ def send_telegram_message(text: str):
         "parse_mode": "HTML"
     }).encode("utf-8")
     try:
+        logging.info(f"Sending Telegram message to {chat_id}...")
         req = urllib.request.Request(url, data=payload)
-        urllib.request.urlopen(req, timeout=5)
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res_body = response.read().decode("utf-8")
+            logging.info(f"Telegram response: {res_body}")
     except Exception as e:
         logging.error(f"Telegram webhook failed: {e}")
 

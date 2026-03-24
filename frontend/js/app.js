@@ -139,7 +139,7 @@ function renderMatches(matches, recommendedOnly, targetId) {
             <div class="ai-analysis">
                 <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">Baron'un Kesin Kararı (${betAmount} BB)</div>
                 <div class="target" style="color: ${targetColor}">
-                    ${ai.bet_target || 'N/A'} @ ${(ai.odds || 0).toFixed(2)}
+                    ${ai.bet_target || 'N/A'} @ ${(ai.odds_value || 0).toFixed(2)}
                 </div>
                 
                 <div style="margin-top: 15px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
@@ -255,8 +255,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function updateBalance(balance, profit, bets) {
-    const balEl = document.getElementById('wallet-balance');
-    const profEl = document.getElementById('wallet-profit');
+    const balEl = document.getElementById('baron-balance');
+    const profEl = document.getElementById('baron-profit');
     if(balEl) {
         const formatBal = parseFloat(balance).toFixed(2);
         balEl.innerText = `${formatBal} BB`;
@@ -282,7 +282,7 @@ function renderBalanceHistoryChart(bets) {
 
     const historyLines = [...(bets || [])]
         .filter(b => b.status === 'WON' || b.status === 'LOST')
-        .sort((a,b) => new Date(a.placed_at) - new Date(b.placed_at));
+        .sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
 
     let currentBal = 10000;
     const labels = ['Başlangıç'];
@@ -336,7 +336,7 @@ function renderPendingBets(bets) {
     const list = document.getElementById('bets-list');
     if (!list) return;
 
-    const pending = (bets || []).filter(b => b.status === 'PENDING').sort((a,b) => new Date(b.placed_at) - new Date(a.placed_at));
+    const pending = (bets || []).filter(b => b.status === 'PENDING').sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
     list.innerHTML = '';
     
     if (pending.length === 0) {
@@ -350,15 +350,14 @@ function renderPendingBets(bets) {
         item.style.background = 'rgba(255,255,255,0.02)';
         item.style.borderRadius = '8px';
         item.style.marginBottom = '8px';
-        const pot = (b.bet_amount * b.odds) - b.bet_amount;
         item.innerHTML = `
             <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                <span style="font-size:11px; color:var(--text-secondary);">${b.sport}</span>
+                <span style="font-size:11px; color:var(--text-secondary);">${b.sport_key || b.sport_title || ''}</span>
                 <span style="font-size:11px; color:#f59e0b;"><i class="fa-solid fa-clock"></i> PENDING</span>
             </div>
             <div style="font-size:13px; font-weight:600; margin-bottom:4px;">${b.home_team} vs ${b.away_team}</div>
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="color:#3b82f6; font-size:12px;">Hedef: ${b.target} @ ${b.odds.toFixed(2)}</span>
+                <span style="color:#3b82f6; font-size:12px;">Hedef: ${b.bet_target || 'N/A'} @ ${(b.odds_value||0).toFixed(2)}</span>
                 <span style="color:var(--text-secondary); font-size:11px;">Miktar: ${b.bet_amount} BB</span>
             </div>
         `;
@@ -370,7 +369,7 @@ function renderHistoryList(bets) {
     const list = document.getElementById('history-list');
     if (!list) return;
 
-    const finished = (bets || []).filter(b => b.status === 'WON' || b.status === 'LOST').sort((a,b) => new Date(b.placed_at) - new Date(a.placed_at));
+    const finished = (bets || []).filter(b => b.status === 'WON' || b.status === 'LOST').sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
     list.innerHTML = '';
     
     if (finished.length === 0) {
@@ -388,12 +387,12 @@ function renderHistoryList(bets) {
         
         item.innerHTML = `
             <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                <span style="font-size:11px; color:var(--text-secondary);">${b.sport}</span>
+                <span style="font-size:11px; color:var(--text-secondary);">${b.sport_key || ''}</span>
                 <span style="font-size:11px; font-weight:bold; color:${b.status==='WON'?'#10b981':'#ef4444'};">${b.status}</span>
             </div>
             <div style="font-size:13px; font-weight:600; margin-bottom:4px;">${b.home_team} vs ${b.away_team}</div>
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="color:var(--text-secondary); font-size:12px;">Hedef: ${b.target} @ ${(b.odds||0).toFixed(2)}</span>
+                <span style="color:var(--text-secondary); font-size:12px;">Hedef: ${b.bet_target || 'N/A'} @ ${(b.odds_value||0).toFixed(2)}</span>
                 <span style="font-size:12px; font-weight:bold; color:${b.status==='WON'?'#10b981':'#ef4444'};">${b.status==='WON'?'+':''}${b.profit ? b.profit.toFixed(2) : ''} BB</span>
             </div>
         `;

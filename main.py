@@ -162,6 +162,7 @@ def health():
 
 async def background_resolver():
     logging.info("Background resolver started.")
+    await asyncio.sleep(10) # Başlangıçta 10 saniye bekle
     while True:
         try:
             pending_sports = await asyncio.to_thread(get_pending_sports)
@@ -191,6 +192,7 @@ async def background_resolver():
 
 async def background_analyzer():
     logging.info("Background analyzer started.")
+    await asyncio.sleep(15) # Başlangıçta 15 saniye bekle
     while True:
         try:
             soccer = await get_odds("soccer_uefa_champs_league_women")
@@ -209,14 +211,13 @@ async def background_analyzer():
                     res = await analyze_event(match)
                     
                     # Eğer AI sonucu geldiyse bahis sistemine gönder
-                    if res and res.get("risk_score", 100) < 60:
+                    if res and res.get("risk_score", 100) < 65: # Eşiği 65 yaptık
                         import bet_manager
                         await asyncio.to_thread(bet_manager.place_virtual_bet, match, res)
                         
-
                     count += 1
-                    await asyncio.sleep(5) # Delay and breathe
-                if count >= 2: break
+                    await asyncio.sleep(10) # Delay and breathe
+                if count >= 3: break
         except Exception as e:
             logging.error(f"Analyzer loop error: {e}")
         await asyncio.sleep(3600) # Every hour
