@@ -18,43 +18,46 @@ _download_failed = False
 
 async def get_dataframe(league="EPL"):
     """
-    Downloads and loads historical data for a given league.
+    Belirli bir lig için verileri indirir ve DataFrame olarak döner.
+    SSL bypass ve 3 deneme mekanizması içerir.
     """
-    global _df, _download_failed
-    
-    if _download_failed and not os.path.exists(os.path.join(DATA_DIR, f"{league}.csv")):
-        return None
-
+    global _download_failed
     CSV_URL = LEAGUE_URLS.get(league)
-    CSV_PATH = os.path.join(DATA_DIR, f"{league}.csv")
-
+    CSV_PATH = os.path.join(DATA_DIR, f"{league}_historical.csv")
+    
     async with _lock:
-        if _df is not None:
-            return _df
+        if not os.path.exists(DATA_DIR):
+            os.makedirs(DATA_DIR)
             
         if CSV_URL:
             if not os.path.exists(CSV_PATH):
-                try:
-                    logging.info(f"Downloading historical data from {CSV_URL}...")
-                    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
-                        response = await client.get(CSV_URL)
-                        response.raise_for_status()
-                        with open(CSV_PATH, 'wb') as f:
-                            f.write(response.content)
-                    logging.info(f"Successfully downloaded: {league}")
-                except Exception as e:
-                    logging.error(f"Failed to download data: {e}")
-                    _download_failed = True
-                    return None
+                logging.info(f"Downloading historical data: {league} (Attempting SSL Bypass)...")
+                for attempt in range(3):
+                    try:
+                        # verify=False ile SSL hataları aşılır, timeout artırıldı
+                        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+                            response = await client.get(CSV_URL)
+                            if response.status_code == 200:
+                                with open(CSV_PATH, 'wb') as f:
+                                    f.write(response.content)
+                                logging.info(f"Successfully downloaded: {league}")
+                                break
+                            else:
+                                logging.warning(f"Download {league} failed with status {response.status_code}")
+                    except Exception as e:
+                        logging.error(f"Attempt {attempt+1} failed for {league}: {e}")
+                        if attempt == 2:
+                            _download_failed = True
+                            return None
+                        await asyncio.sleep(5)
 
             try:
                 _df = pd.read_csv(CSV_PATH)
                 return _df
             except Exception as e:
-                logging.error(f"Error reading CSV: {e}")
-                _download_failed = True
+                logging.error(f"Error reading CSV {CSV_PATH}: {e}")
                 return None
-    return None
+        return None
 
 async def get_team_stats(team_name):
     """

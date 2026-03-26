@@ -53,26 +53,30 @@ def extract_real_odds(event, bet_target):
 
 from google import genai
 from openai import OpenAI
+from groq import Groq
+import httpx
 
 # Mevcut API Key ve Client kurulumu
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
+groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-# Genişletilmiş model listesi
+# Genişletilmiş model listesi (Daha kararlı isimler)
 AI_MODELS = [
-    'gemini-2.0-flash',
-    'gemini-flash-latest',
-    'gemini-pro-latest',
-    'gemini-2.5-flash-lite'
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+    'gemini-2.0-flash'
 ]
 
 OPENAI_MODEL = "gpt-4o-mini"
 
 CACHE_FILE = os.path.join("data", "ai_cache.json")
-CACHE_TTL = 86400  # 24 hours
+CACHE_TTL = 172800  # 48 hours for Free Tier stability
 
 def load_cache():
     if os.path.exists(CACHE_FILE):
@@ -95,6 +99,61 @@ def save_cache(cache_data):
 
 AI_CACHE = load_cache()
 
+async def retry_with_backoff(coro_func, *args, max_retries=3, initial_delay=5, **kwargs):
+    """Üssel bekleme (Exponential Backoff) ile API çağrısını tekrar dener."""
+    for attempt in range(max_retries):
+        try:
+            return await coro_func(*args, **kwargs)
+        except Exception as e:
+            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                delay = initial_delay * (2 ** attempt)
+                logging.warning(f"Kota doldu (429), {delay} saniye bekleniyor... (Deneme {attempt+1})")
+                await asyncio.sleep(delay)
+            else:
+                logging.error(f"API hatası: {e}")
+                break
+    return None
+
+async def analyze_with_fallback(prompt):
+    """Gemini fail olursa Groq veya OpenRouter ile analiz yapar."""
+    # 1. Groq Denemesi
+    if groq_client:
+        try:
+            logging.info("Gemini yetersiz, Groq (Llama 3.1) kullanılıyor...")
+            completion = await asyncio.to_thread(
+                groq_client.chat.completions.create,
+                model="llama-3.1-70b-versatile",
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return completion.choices[0].message.content
+        except Exception as e:
+            logging.error(f"Groq Hatası: {e}")
+
+    # 2. OpenRouter Denemesi
+    if OPENROUTER_API_KEY:
+        try:
+            logging.info("Groq yetersiz, OpenRouter kullanılıyor...")
+            async with httpx.AsyncClient() as httpx_client:
+                response = await httpx_client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "mistralai/mistral-7b-instruct-v0.1",
+                        "messages": [{"role": "user", "content": prompt}]
+                    },
+                    timeout=30.0
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    return data['choices'][0]['message']['content']
+        except Exception as e:
+            logging.error(f"OpenRouter Hatası: {e}")
+
+    return "Alternatif modeller de başarısız oldu."
+
 async def analyze_with_openai(prompt):
     """OpenAI GPT-4o-mini ile analiz yapar."""
     try:
@@ -110,8 +169,7 @@ async def analyze_with_openai(prompt):
 
 async def calculate_risk(match_data):
     """
-    Gemini ve OpenAI kullanarak işbirlikçi maç analizi yapar.
-    Gemini son kararı verir.
+    Gemini, OpenAI ve Fallback modelleri kullanarak işbirlikçi maç analizi yapar.
     """
     default_resp = {
         "risk_score": 99, 
@@ -121,9 +179,6 @@ async def calculate_risk(match_data):
         "recommendation": "Analiz Yapılamadı", 
         "analysis": "Yapay zeka modellerinin tamamı şu an kota limitinde veya hata verdi."
     }
-
-    if not GEMINI_API_KEY:
-        return {"risk_score": 50, "win_probability": 50, "recommendation": "Mock Analizi", "analysis": "Lütfen GEMINI_API_KEY girin."}
 
     sport_key = match_data.get('sport_key', '')
     home_name = match_data.get('home_team', '')
@@ -156,33 +211,38 @@ Analizinde sakatlıklar, form durumu ve değerli bahis seçeneklerini değerlend
     
     gemini_analysis = ""
     for model_name in AI_MODELS:
-        try:
-            resp = await client.aio.models.generate_content(model=model_name, contents=gemini_initial_prompt)
+        resp = await retry_with_backoff(client.aio.models.generate_content, model=model_name, contents=gemini_initial_prompt)
+        if resp:
             gemini_analysis = resp.text
             break
-        except Exception as e:
-            logging.warning(f"Gemini Step 1 ({model_name}) error: {e}")
-            continue
-
+    
+    # Eğer Gemini tamamen fail olursa fallback kullan
     if not gemini_analysis:
+        gemini_analysis = await analyze_with_fallback(gemini_initial_prompt[:2000] + "\nLütfen bu maçı analiz et.")
+
+    if "başarısız oldu" in gemini_analysis:
         return default_resp
 
-    # 2. ADIM: OpenAI "Şeytanın Avukatı" (Anti-Thesis)
-    openai_prompt = f"""
-Sen deneyimli bir bahis uzmanısın. Gemini'nin yaptığı şu analizi eleştir ve karşı görüşlerini sun:
-Maç: {home_name} vs {away_name}
-Gemini Analizi: {gemini_analysis}
+    await asyncio.sleep(5) # API'ye nefes aldır
 
-Gemini'nin atladığı riskleri veya daha mantıklı bahis seçeneklerini belirt. Objektif ve katı ol.
+    # 2. ADIM: OpenAI "Şeytanın Avukatı"
+    openai_prompt = f"""
+Sen deneyimli bir bahis uzmanısın. Yapılan şu analizi eleştir ve karşı görüşlerini sun:
+Maç: {home_name} vs {away_name}
+Analiz: {gemini_analysis}
+
+Atlanan riskleri veya daha mantıklı bahis seçeneklerini belirt. Objektif ve katı ol.
 """
     openai_critique = await analyze_with_openai(openai_prompt)
 
-    # 3. ADIM: Gemini Final Kararı (Synthesis)
+    await asyncio.sleep(5) # API'ye nefes aldır
+
+    # 3. ADIM: Gemini Final Kararı (Veya Fallback)
     final_prompt = f"""
-Sen 'BetBot Baron' AI'sısın. Kendi ilk analizin ve OpenAI'ın eleştirileri doğrultusunda son kararını ver.
+Sen 'BetBot Baron' AI'sısın. İlk analiz ve OpenAI'ın eleştirileri doğrultusunda son kararını ver.
 Maç Verisi: {json.dumps(match_data)}
-Senin İlk Analizin: {gemini_analysis}
-OpenAI'ın Eleştirisi: {openai_critique}
+İlk Analiz: {gemini_analysis}
+OpenAI Eleştirisi: {openai_critique}
 
 - Oranı 1.35 altı olan "garanti" bahisleri önerme.
 - En çok güvendiğin KESİN bahis hedefini 'bet_target' alanına yaz. (HOME_WIN, AWAY_WIN, DRAW, OVER 2.5, UNDER 2.5 vb.)
@@ -190,28 +250,28 @@ OpenAI'ın Eleştirisi: {openai_critique}
 {{"risk_score": int (0-100), "win_probability": int (0-100), "bet_target": "string", "odds_value": float, "recommendation": "string", "analysis": "string"}}
 """
 
+    final_result_text = ""
     for model_name in AI_MODELS:
-        try:
-            logging.info(f"Gemini Final Verdict ({model_name}): {home_name} vs {away_name}")
-            response = await client.aio.models.generate_content(model=model_name, contents=final_prompt)
-            text = response.text
-            
-            match_json = re.search(r'\{.*\}', text, re.DOTALL)
-            if not match_json: continue
-            
+        resp = await retry_with_backoff(client.aio.models.generate_content, model=model_name, contents=final_prompt)
+        if resp:
+            final_result_text = resp.text
+            break
+    
+    if not final_result_text:
+        final_result_text = await analyze_with_fallback(final_prompt)
+
+    try:
+        match_json = re.search(r'\{.*\}', final_result_text, re.DOTALL)
+        if match_json:
             analysis = json.loads(match_json.group())
-            
-            # Robustify analysis
-            analysis["analysis"] = f"Gemini: {gemini_analysis[:200]}... | OpenAI: {openai_critique[:200]}... | Sonuç: {analysis.get('analysis', '')}"
+            analysis["analysis"] = f"AI Sentez: {gemini_analysis[:150]}... | Eleştiri: {openai_critique[:150]}... | Sonuç: {analysis.get('analysis', '')}"
             
             real_odds = extract_real_odds(match_data, analysis.get("bet_target", ""))
-            if real_odds > 1.0:
-                analysis["odds_value"] = real_odds
+            if real_odds > 1.0: analysis["odds_value"] = real_odds
             
             return analysis
-        except Exception as e:
-            logging.error(f"Gemini Final Step error: {e}")
-            continue
+    except Exception as e:
+        logging.error(f"Final parse error: {e}")
 
     return default_resp
 
@@ -219,7 +279,30 @@ OpenAI'ın Eleştirisi: {openai_critique}
 async def analyze_event(event):
     event_id = event.get("id")
     current_time = time.time()
+    home_team = event.get("home_team")
+    away_team = event.get("away_team")
     
+    # 1. Kotayı korumak için odds filtreleme (1.50 - 2.50 aralığı "fırsat" maçlarıdır)
+    # Bookmakers verisinden h2h oranlarını kontrol et
+    best_odds = 0.0
+    if event.get("bookmakers"):
+        for bkm in event["bookmakers"]:
+            for mkt in bkm.get("markets", []):
+                if mkt["key"] == "h2h":
+                    for out in mkt.get("outcomes", []):
+                        best_odds = max(best_odds, out.get("price", 0))
+    
+    # Eğer oranlar 1.50 - 2.50 dışında ise (çok garanti veya çok riskli) AI'ya sormayalım
+    if best_odds > 0 and (best_odds < 1.45 or best_odds > 2.60):
+        logging.info(f"Skipping {home_team} vs {away_team} due to odds ({best_odds}) outside target range.")
+        return {
+            "risk_score": 0, 
+            "win_probability": 0, 
+            "analysis": f"Oranlar ({best_odds}) hedef aralık dışında olduğu için pas geçildi.", 
+            "bet_target": "N/A", 
+            "is_recommended": False
+        }
+
     if event_id in AI_CACHE:
         cached_item = AI_CACHE[event_id]
         cache_ts = cached_item.get("_cached_at") or cached_item.get("timestamp", 0)
