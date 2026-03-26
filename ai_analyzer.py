@@ -52,18 +52,24 @@ def extract_real_odds(event, bet_target):
     return 0.0
 
 from google import genai
+from openai import OpenAI
 
 # Mevcut API Key ve Client kurulumu
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-client = genai.Client(api_key=GEMINI_API_KEY)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Genişletilmiş model listesi (2.0 modelleri kotaları daha geniş olabilir)
+client = genai.Client(api_key=GEMINI_API_KEY)
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
+
+# Genişletilmiş model listesi
 AI_MODELS = [
+    'gemini-2.0-flash',
     'gemini-flash-latest',
     'gemini-pro-latest',
-    'gemini-2.5-flash-lite',
-    'gemini-2.0-flash'
+    'gemini-2.5-flash-lite'
 ]
+
+OPENAI_MODEL = "gpt-4o-mini"
 
 CACHE_FILE = os.path.join("data", "ai_cache.json")
 CACHE_TTL = 86400  # 24 hours
@@ -89,9 +95,23 @@ def save_cache(cache_data):
 
 AI_CACHE = load_cache()
 
+async def analyze_with_openai(prompt):
+    """OpenAI GPT-4o-mini ile analiz yapar."""
+    try:
+        response = await asyncio.to_thread(
+            openai_client.chat.completions.create,
+            model=OPENAI_MODEL,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        logging.error(f"OpenAI error: {e}")
+        return "OpenAI analizi başarısız oldu."
+
 async def calculate_risk(match_data):
     """
-    Gemini API'yi kullanarak maç analizi yapar.
+    Gemini ve OpenAI kullanarak işbirlikçi maç analizi yapar.
+    Gemini son kararı verir.
     """
     default_resp = {
         "risk_score": 99, 
@@ -99,7 +119,7 @@ async def calculate_risk(match_data):
         "bet_target": "N/A",
         "odds_value": 0.0,
         "recommendation": "Analiz Yapılamadı", 
-        "analysis": "Yapay zeka modellerinin tamamı şu an kota limitinde veya hata verdi. Lütfen 5-10 dakika sonra tekrar deneyin."
+        "analysis": "Yapay zeka modellerinin tamamı şu an kota limitinde veya hata verdi."
     }
 
     if not GEMINI_API_KEY:
@@ -117,89 +137,84 @@ async def calculate_risk(match_data):
         away_stats = await get_team_stats(away_name)
     
     if "basketball_nba" in sport_key:
-        home_stats = await asyncio.to_thread(get_nba_team_stats, home_name)
-        away_stats = await asyncio.to_thread(get_nba_team_stats, away_name)
+        home_stats = await asyncio.to_thread(get_nba_team_stats, home_name, away_name)
+        away_stats = await asyncio.to_thread(get_nba_team_stats, away_name, home_name)
 
     past_performance = get_recent_performance(limit=10)
 
-    prompt = f"""
-Sen uzman bir spor bahisleri yapay zekasısın ("BetBot Baron"). Şu yaklaşan maçı analiz et:
+    # 1. ADIM: Gemini İlk Analizi
+    gemini_initial_prompt = f"""
+Uzman bir spor analisti olarak şu maçı detaylıca analiz et:
 {json.dumps(match_data, indent=2)}
-
-Tarihsel İstatistikler ve Lig Formu (Eğer varsa):
-Ev Sahibi: {home_stats}
+İstatistikler:
+Ev: {home_stats}
 Deplasman: {away_stats}
+Geçmiş Performansımız: {past_performance}
 
-Senin Önceki Tahmin Performansın (Öğrenmen İçin):
-{past_performance}
+Analizinde sakatlıklar, form durumu ve değerli bahis seçeneklerini değerlendir. Sadece analiz metni dön.
+"""
+    
+    gemini_analysis = ""
+    for model_name in AI_MODELS:
+        try:
+            resp = await client.aio.models.generate_content(model=model_name, contents=gemini_initial_prompt)
+            gemini_analysis = resp.text
+            break
+        except Exception as e:
+            logging.warning(f"Gemini Step 1 ({model_name}) error: {e}")
+            continue
 
-- En çok güvendiğin KESİN bahis hedefini 'bet_target' alanına yaz. 
-- Örnekler: "HOME_WIN", "AWAY_WIN", "DRAW", "OVER 2.5" (Futbol için), "UNDER 2.5", "OVER 210.5" (Basketbol Toplam Sayı için), "UNDER 212.5".
-- 'odds_value' alanına seçtiğin hedefin json içindeki güncel bahis oranını ondalık sayı (float) olarak yaz.
-- KRİTİK: Oranı 1.35'in altında olan (1.10, 1.25 vb.) "garanti" görünen maçları önerme. Baron sadece değerli (value) maçları seçer.
-SADECE RAW JSON FORMATINDA DÖN:
+    if not gemini_analysis:
+        return default_resp
+
+    # 2. ADIM: OpenAI "Şeytanın Avukatı" (Anti-Thesis)
+    openai_prompt = f"""
+Sen deneyimli bir bahis uzmanısın. Gemini'nin yaptığı şu analizi eleştir ve karşı görüşlerini sun:
+Maç: {home_name} vs {away_name}
+Gemini Analizi: {gemini_analysis}
+
+Gemini'nin atladığı riskleri veya daha mantıklı bahis seçeneklerini belirt. Objektif ve katı ol.
+"""
+    openai_critique = await analyze_with_openai(openai_prompt)
+
+    # 3. ADIM: Gemini Final Kararı (Synthesis)
+    final_prompt = f"""
+Sen 'BetBot Baron' AI'sısın. Kendi ilk analizin ve OpenAI'ın eleştirileri doğrultusunda son kararını ver.
+Maç Verisi: {json.dumps(match_data)}
+Senin İlk Analizin: {gemini_analysis}
+OpenAI'ın Eleştirisi: {openai_critique}
+
+- Oranı 1.35 altı olan "garanti" bahisleri önerme.
+- En çok güvendiğin KESİN bahis hedefini 'bet_target' alanına yaz. (HOME_WIN, AWAY_WIN, DRAW, OVER 2.5, UNDER 2.5 vb.)
+- SADECE RAW JSON FORMATINDA DÖN:
 {{"risk_score": int (0-100), "win_probability": int (0-100), "bet_target": "string", "odds_value": float, "recommendation": "string", "analysis": "string"}}
 """
 
     for model_name in AI_MODELS:
-        if model_name != AI_MODELS[0]:
-            await asyncio.sleep(2) # Modeller arası kısa bekleme
+        try:
+            logging.info(f"Gemini Final Verdict ({model_name}): {home_name} vs {away_name}")
+            response = await client.aio.models.generate_content(model=model_name, contents=final_prompt)
+            text = response.text
+            
+            match_json = re.search(r'\{.*\}', text, re.DOTALL)
+            if not match_json: continue
+            
+            analysis = json.loads(match_json.group())
+            
+            # Robustify analysis
+            analysis["analysis"] = f"Gemini: {gemini_analysis[:200]}... | OpenAI: {openai_critique[:200]}... | Sonuç: {analysis.get('analysis', '')}"
+            
+            real_odds = extract_real_odds(match_data, analysis.get("bet_target", ""))
+            if real_odds > 1.0:
+                analysis["odds_value"] = real_odds
+            
+            return analysis
+        except Exception as e:
+            logging.error(f"Gemini Final Step error: {e}")
+            continue
 
-        attempts = 0
-        max_attempts = 1
-        
-        while attempts < max_attempts:
-            try:
-                logging.info(f"Gemini AI ({model_name}) denerken: {home_name} vs {away_name}")
-                response = await client.aio.models.generate_content(
-                    model=model_name,
-                    contents=prompt
-                )
-                
-                # Robust JSON Extraction
-                try:
-                    text = response.text
-                except Exception as e:
-                    logging.error(f"AI Response Error (Safety?): {e}")
-                    raise ValueError("AI response blocked or empty")
-
-                match_json = re.search(r'\{.*\}', text, re.DOTALL)
-                if not match_json:
-                    raise ValueError("JSON not found in AI response")
-                
-                analysis = json.loads(match_json.group())
-                
-                # Defensive Defaults
-                required_keys = ["risk_score", "win_probability", "bet_target", "odds_value", "recommendation", "analysis"]
-                for key in required_keys:
-                    if key not in analysis:
-                        analysis[key] = default_resp[key]
-                
-                # Ensure types
-                analysis["risk_score"] = int(analysis.get("risk_score", 99))
-                analysis["win_probability"] = int(analysis.get("win_probability", 0))
-                
-                # Gerçek oranları API JSON tablosundan matematiksel olarak bularak AI'nin uydurmasını engelle
-                real_odds = extract_real_odds(match_data, analysis.get("bet_target", ""))
-                if real_odds > 1.0:
-                    analysis["odds_value"] = real_odds
-                else:
-                    analysis["odds_value"] = float(analysis.get("odds_value", 0.0))
-                
-                return analysis
-            except Exception as e:
-                attempts += 1
-                err_msg = str(e).lower()
-                logging.error(f"AI Model {model_name} error: {e}")
-                
-                if "429" in err_msg or "quota" in err_msg:
-                    # Kota sorunu varsa bir süre bekleyip sonraki modele geç
-                    await asyncio.sleep(3)
-                    break 
-                else:
-                    break # Diğer hatalarda da sonraki modele geç
-                    
     return default_resp
+
 
 async def analyze_event(event):
     event_id = event.get("id")
