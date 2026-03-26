@@ -133,11 +133,12 @@ async def api_player_props():
 
 @app.get("/api/bets/history")
 def api_bet_history():
+    from bet_manager import get_current_balance, get_bet_history
     bets = get_bet_history()
-    START_BALANCE = 10000.0
+    current_balance = get_current_balance()
+    
     total_profit = sum(b.get("profit", 0) for b in bets if b.get("status") in ["WON", "LOST"])
-    pending_total = sum(b.get("bet_amount", 100) for b in bets if b.get("status") == "PENDING")
-    current_balance = START_BALANCE + total_profit - pending_total
+    
     return {
         "current_balance": round(current_balance, 2),
         "profit": round(total_profit, 2),

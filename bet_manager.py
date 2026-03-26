@@ -69,11 +69,55 @@ def init_db():
 # Uygulama açılışında DB kontrolü/kurulumu
 init_db()
 
+def get_current_balance(start_balance=10000.0):
+    """Veritabanındaki kâr/zarar durumuna göre güncel bakiyeyi hesaplar."""
+    try:
+        with sqlite3.connect(DATABASE_FILE) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT status, profit, bet_amount FROM bets")
+            rows = cursor.fetchall()
+            
+            total_profit = sum(row['profit'] for row in rows if row['status'] in ['WON', 'LOST'])
+            pending_total = sum(row['bet_amount'] for row in rows if row['status'] == 'PENDING')
+            
+            return start_balance + total_profit - pending_total
+    except Exception as e:
+        logging.error(f"Balance calculation error: {e}")
+        return start_balance
+
+def calculate_kelly_stake(odds, probability, bankroll, fraction=0.25):
+    """
+    Fractional Kelly Criterion ile ideal bahis miktarını hesaplar.
+    fraction: 0.25 (Çeyrek Kelly) olarak güncellendi.
+    bankroll_cap: Kasanın maksimum %5'i tek bir bahse yatırılabilir.
+    """
+    if odds <= 1.0: return 25.0
+    p = probability / 100.0
+    q = 1.0 - p
+    b = odds - 1.0
+    
+    # Kelly Formülü: f* = (bp - q) / b
+    kelly_f = (b * p - q) / b
+    
+    if kelly_f <= 0: 
+        return 25.0 # Minimum miktar
+    
+    recommended_stake = bankroll * kelly_f * fraction
+    
+    # %5 Bankroll Cap (Kasa koruma kilidi)
+    max_allowed = bankroll * 0.05
+    
+    final_stake = min(recommended_stake, max_allowed)
+    
+    # Alt ve üst limitler: Min 25 BB, Max 1000 BB
+    return round(max(25.0, min(final_stake, 1000.0)), 2)
+
 def place_virtual_bet(event, ai_analysis, custom_amount=None):
     """
     Düşük riskli maçlar için sanal veritabanına bahis ekler.
+    Kelly Criterion kullanarak dinamik miktar belirler.
     """
-    amount = custom_amount if custom_amount else BET_AMOUNT
     match_id = event.get('id')
     
     try:
@@ -84,6 +128,15 @@ def place_virtual_bet(event, ai_analysis, custom_amount=None):
             cursor.execute('SELECT id FROM bets WHERE match_id = ?', (match_id,))
             if cursor.fetchone():
                 return False
+            
+            # Dinamik miktar hesaplama
+            if custom_amount:
+                amount = custom_amount
+            else:
+                current_bal = get_current_balance()
+                odds = ai_analysis.get('odds_value', 1.90)
+                prob = ai_analysis.get('win_probability', 50)
+                amount = calculate_kelly_stake(odds, prob, current_bal)
             
             # Place the bet
             commence_time = event.get('commence_time')
@@ -102,17 +155,17 @@ def place_virtual_bet(event, ai_analysis, custom_amount=None):
             
             # Telegram bildirimi gönder
             msg = (
-                f"🚨 <b>YENİ BAHİS ALINDI!</b>\n\n"
+                f"🚨 <b>YENİ BAHİS ALINDI (Çeyrek Kelly: %25)</b>\n\n"
                 f"🏀 <b>Maç:</b> {home_team} vs {away_team}\n"
                 f"🎯 <b>Hedef:</b> {bet_target}\n"
                 f"📈 <b>Oran:</b> {odds_value}\n"
-                f"💰 <b>Miktar:</b> {amount} BB\n\n"
+                f"💰 <b>Miktar:</b> {amount} BB (Kasa: {get_current_balance():.2f})\n\n"
                 f"🧠 <b>Baron'un Gerekçesi:</b>\n"
-                f"<i>{ai_analysis.get('analysis', '')[:4000]}</i>"
+                f"<i>{ai_analysis.get('analysis', '')[:3800]}</i>"
             )
             send_telegram_message(msg)
             
-            logging.info(f"VIRTUAL BET PLACED: {home_team} vs {away_team} | {bet_target} @ {odds_value} | Amount: {amount} BB")
+            logging.info(f"VIRTUAL BET PLACED: {home_team} vs {away_team} | {bet_target} @ {odds_value} | Amount: {amount} BB (Kelly)")
             return True
     except Exception as e:
         logging.error(f"Error placing virtual bet: {e}")
