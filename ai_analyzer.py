@@ -1,16 +1,65 @@
-import json
-from google import genai
 import os
-from dotenv import load_dotenv
+import json
 import asyncio
 import logging
 import time
 import re
+import httpx
+from google import genai
+from openai import OpenAI
+from groq import Groq
+from dotenv import load_dotenv
+
+# İç bağımlılıklar
 from data_loader import get_team_stats
 from nba_data import get_nba_team_stats
 from bet_manager import place_virtual_bet, get_recent_performance
 
 load_dotenv()
+
+# API Keys
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+# Clients
+client = genai.Client(api_key=GEMINI_API_KEY)
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
+groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+
+# Modeller
+AI_MODELS = [
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+    'gemini-2.0-flash'
+]
+OPENAI_MODEL = "gpt-4o-mini"
+
+# Cache Ayarları
+CACHE_FILE = os.path.join("data", "ai_cache.json")
+CACHE_TTL = 172800  # 48 hours for Free Tier stability
+
+def load_cache():
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logging.error(f"Error loading AI cache: {e}")
+            return {}
+    return {}
+
+def save_cache(cache_data):
+    try:
+        if not os.path.exists("data"):
+            os.makedirs("data")
+        with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(cache_data, f, ensure_ascii=False)
+    except Exception as e:
+        logging.error(f"Failed to save AI cache: {e}")
+
+AI_CACHE = load_cache()
 
 def extract_real_odds(event, bet_target):
     if not event.get("bookmakers"):
@@ -50,54 +99,6 @@ def extract_real_odds(event, bet_target):
     except Exception:
         pass
     return 0.0
-
-from google import genai
-from openai import OpenAI
-from groq import Groq
-import httpx
-
-# Mevcut API Key ve Client kurulumu
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-
-client = genai.Client(api_key=GEMINI_API_KEY)
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
-groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
-
-# Genişletilmiş model listesi (Daha kararlı isimler)
-AI_MODELS = [
-    'gemini-1.5-flash',
-    'gemini-1.5-pro',
-    'gemini-2.0-flash'
-]
-
-OPENAI_MODEL = "gpt-4o-mini"
-
-CACHE_FILE = os.path.join("data", "ai_cache.json")
-CACHE_TTL = 172800  # 48 hours for Free Tier stability
-
-def load_cache():
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            logging.error(f"Error loading AI cache: {e}")
-            return {}
-    return {}
-
-def save_cache(cache_data):
-    try:
-        if not os.path.exists("data"):
-            os.makedirs("data")
-        with open(CACHE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(cache_data, f, ensure_ascii=False)
-    except Exception as e:
-        logging.error(f"Failed to save AI cache: {e}")
-
-AI_CACHE = load_cache()
 
 async def retry_with_backoff(coro_func, *args, max_retries=3, initial_delay=5, **kwargs):
     """Üssel bekleme (Exponential Backoff) ile API çağrısını tekrar dener."""

@@ -10,6 +10,12 @@ if not os.path.exists(DATA_DIR):
 
 LEAGUE_URLS = {
     "EPL": "https://www.football-data.co.uk/mmz4281/2324/E0.csv",
+    "LA_LIGA": "https://www.football-data.co.uk/mmz4281/2324/SP1.csv",
+    "BUNDESLIGA": "https://www.football-data.co.uk/mmz4281/2324/D1.csv",
+    "SERIE_A": "https://www.football-data.co.uk/mmz4281/2324/I1.csv",
+    "LIGUE_1": "https://www.football-data.co.uk/mmz4281/2324/F1.csv",
+    "WORLD_CUP": "https://www.football-data.co.uk/new/world_cup.csv",
+    "INT_QUAL": "https://www.football-data.co.uk/new/euro_qualifiers.csv"
 }
 
 _df = None
