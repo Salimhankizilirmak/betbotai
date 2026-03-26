@@ -161,34 +161,39 @@ def get_logs():
 def health():
     return {"status": "ok", "port": 8005}
 
+async def check_and_resolve_all_pending_bets():
+    """Bekleyen tüm bahislerin sonucunu kontrol eder ve sonuçlandırır."""
+    try:
+        pending_sports = await asyncio.to_thread(get_pending_sports)
+        if pending_sports:
+            logging.info(f"Checking results for pending sports: {pending_sports}")
+            for sport in pending_sports:
+                scores = await get_scores(sport)
+                for event in scores:
+                    if event.get('completed'):
+                        home_team = event.get('home_team')
+                        scores_list = event.get('scores', [])
+                        if len(scores_list) == 2:
+                            s1 = scores_list[0]['score']
+                            s2 = scores_list[1]['score']
+                            n1 = scores_list[0]['name']
+                            
+                            h_score = int(s1) if n1 == home_team else int(s2)
+                            a_score = int(s2) if n1 == home_team else int(s1)
+                            
+                            winner = "DRAW"
+                            if h_score > a_score: winner = "HOME_WIN"
+                            elif a_score > h_score: winner = "AWAY_WIN"
+                            
+                            await asyncio.to_thread(resolve_bet_status, event['id'], winner, h_score, a_score)
+    except Exception as e:
+        logging.error(f"Error in check_and_resolve_all_pending_bets: {e}")
+
 async def background_resolver():
     logging.info("Background resolver started.")
-    await asyncio.sleep(10) # Başlangıçta 10 saniye bekle
+    await asyncio.sleep(5)
     while True:
-        try:
-            pending_sports = await asyncio.to_thread(get_pending_sports)
-            if pending_sports:
-                for sport in pending_sports:
-                    scores = await get_scores(sport)
-                    for event in scores:
-                        if event.get('completed'):
-                            home_team = event.get('home_team')
-                            scores_list = event.get('scores', [])
-                            if len(scores_list) == 2:
-                                s1 = scores_list[0]['score']
-                                s2 = scores_list[1]['score']
-                                n1 = scores_list[0]['name']
-                                
-                                h_score = int(s1) if n1 == home_team else int(s2)
-                                a_score = int(s2) if n1 == home_team else int(s1)
-                                
-                                winner = "DRAW"
-                                if h_score > a_score: winner = "HOME_WIN"
-                                elif a_score > h_score: winner = "AWAY_WIN"
-                                
-                                await asyncio.to_thread(resolve_bet_status, event['id'], winner, h_score, a_score)
-        except Exception as e:
-            logging.error(f"Resolver error: {e}")
+        await check_and_resolve_all_pending_bets()
         await asyncio.sleep(1800)
 
 async def background_analyzer():
@@ -196,6 +201,9 @@ async def background_analyzer():
     await asyncio.sleep(15) # Başlangıçta 15 saniye bekle
     while True:
         try:
+            # Önce sonuçları temizle ki bütçe güncellensin
+            await check_and_resolve_all_pending_bets()
+            
             soccer = await get_odds("soccer_uefa_champs_league_women")
             basket = await get_odds("basketball_euroleague")
             nba = await get_odds("basketball_nba")
@@ -239,6 +247,8 @@ async def background_props_analyzer():
     logging.info("Background NBA props analyzer started.")
     while True:
         try:
+            await check_and_resolve_all_pending_bets()
+            
             events = await get_odds("basketball_nba")
             if isinstance(events, list) and len(events) > 0:
                 all_recs = []
@@ -264,6 +274,9 @@ async def background_props_analyzer():
 @app.on_event("startup")
 async def startup():
     init_db()
+    # Sunucu açıldığında anında sonuçları kontrol et
+    asyncio.create_task(check_and_resolve_all_pending_bets())
+    
     asyncio.create_task(background_resolver())
     asyncio.create_task(background_analyzer())
     asyncio.create_task(background_props_analyzer())
