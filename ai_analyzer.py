@@ -7,7 +7,6 @@ import re
 import httpx
 from google import genai
 from openai import OpenAI
-from groq import Groq
 from dotenv import load_dotenv
 
 # İç bağımlılıklar
@@ -26,13 +25,17 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 # Clients
 client = genai.Client(api_key=GEMINI_API_KEY)
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
-groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+# Groq API'sini OpenAI kütüphanesi üzerinden çağırıyoruz (Daha stabil)
+groq_client = OpenAI(
+    api_key=GROQ_API_KEY,
+    base_url="https://api.groq.com/openai/v1"
+) if GROQ_API_KEY else None
 
 # Modeller
 AI_MODELS = [
     'gemini-1.5-flash',
-    'gemini-1.5-pro',
-    'gemini-2.0-flash'
+    'gemini-1.5-flash-8b',
+    'gemini-2.0-flash-exp'
 ]
 OPENAI_MODEL = "gpt-4o-mini"
 
@@ -236,6 +239,9 @@ Analiz: {gemini_analysis}
 Atlanan riskleri veya daha mantıklı bahis seçeneklerini belirt. Objektif ve katı ol.
 """
     openai_critique = await analyze_with_openai(openai_prompt)
+    if "başarısız oldu" in openai_critique:
+        logging.warning("OpenAI critique failed, continuing with fallback models...")
+        openai_critique = "OpenAI kotası bittiği için eleştiri yapılamadı, Groq/OpenRouter ile devam ediliyor."
 
     await asyncio.sleep(5) # API'ye nefes aldır
 
@@ -294,8 +300,8 @@ async def analyze_event(event):
                     for out in mkt.get("outcomes", []):
                         best_odds = max(best_odds, out.get("price", 0))
     
-    # Eğer oranlar 1.50 - 2.50 dışında ise (çok garanti veya çok riskli) AI'ya sormayalım
-    if best_odds > 0 and (best_odds < 1.45 or best_odds > 2.60):
+    # Eğer oranlar 1.35 - 5.00 dışında ise (çok garanti veya çok riskli) AI'ya sormayalım
+    if best_odds > 0 and (best_odds < 1.35 or best_odds > 5.00):
         logging.info(f"Skipping {home_team} vs {away_team} due to odds ({best_odds}) outside target range.")
         return {
             "risk_score": 0, 
@@ -327,7 +333,7 @@ async def analyze_event(event):
     win_prob = risk_info.get("win_probability", 0)
     
     # Recommendation eşiğini test için biraz düşürelim
-    risk_info["is_recommended"] = win_prob >= 55 and risk_score < 60
+    risk_info["is_recommended"] = win_prob >= 50 and risk_score < 60
     
     stake_amount = 100
     if risk_score < 20:
@@ -353,6 +359,10 @@ async def analyze_event(event):
 
 async def analyze_odds(odds_data):
     if not odds_data: return []
+    results = []
     # Çoklu analiz sayısını 2'ye düşürerek kotayı koru
-    tasks = [analyze_event(event) for event in odds_data[:2]] 
-    return await asyncio.gather(*tasks)
+    for event in odds_data[:2]:
+        res = await analyze_event(event)
+        results.append(res)
+        await asyncio.sleep(10) # Gemini 429 hatalarını azaltmak için bekleme ekle
+    return results
