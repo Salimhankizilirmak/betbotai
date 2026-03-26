@@ -116,14 +116,15 @@ async def retry_with_backoff(coro_func, *args, max_retries=3, initial_delay=5, *
     return None
 
 async def analyze_with_fallback(prompt):
-    """Gemini fail olursa Groq veya OpenRouter ile analiz yapar."""
+    """Gemini fail olursa Groq veya OpenRouter ile analiz yapar. (TÜRKÇE)"""
+    prompt = f"{prompt}\n\nLÜTFEN TÜRKÇE YANIT VER."
     # 1. Groq Denemesi
     if groq_client:
         try:
-            logging.info("Gemini yetersiz, Groq (Llama 3.1) kullanılıyor...")
+            logging.info("Gemini yetersiz, Groq (Llama 3.3) kullanılıyor...")
             completion = await asyncio.to_thread(
                 groq_client.chat.completions.create,
-                model="llama-3.1-70b-versatile",
+                model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": prompt}]
             )
             return completion.choices[0].message.content
@@ -240,14 +241,14 @@ Atlanan riskleri veya daha mantıklı bahis seçeneklerini belirt. Objektif ve k
 
     # 3. ADIM: Gemini Final Kararı (Veya Fallback)
     final_prompt = f"""
-Sen 'BetBot Baron' AI'sısın. İlk analiz ve OpenAI'ın eleştirileri doğrultusunda son kararını ver.
+Sen 'BetBot Baron' AI'sısın. İlk analiz ve OpenAI'ın eleştirileri doğrultusunda son kararını ver. TÜM ANALİZİ TÜRKÇE YAP.
 Maç Verisi: {json.dumps(match_data)}
 İlk Analiz: {gemini_analysis}
 OpenAI Eleştirisi: {openai_critique}
 
 - Oranı 1.35 altı olan "garanti" bahisleri önerme.
 - En çok güvendiğin KESİN bahis hedefini 'bet_target' alanına yaz. (HOME_WIN, AWAY_WIN, DRAW, OVER 2.5, UNDER 2.5 vb.)
-- SADECE RAW JSON FORMATINDA DÖN:
+- SADECE RAW JSON FORMATINDA DÖN VE 'analysis' ALANINI TÜRKÇE DOLDUR:
 {{"risk_score": int (0-100), "win_probability": int (0-100), "bet_target": "string", "odds_value": float, "recommendation": "string", "analysis": "string"}}
 """
 
@@ -352,5 +353,6 @@ async def analyze_event(event):
 
 async def analyze_odds(odds_data):
     if not odds_data: return []
-    tasks = [analyze_event(event) for event in odds_data[:3]] # Paralel sayısını düşür
+    # Çoklu analiz sayısını 2'ye düşürerek kotayı koru
+    tasks = [analyze_event(event) for event in odds_data[:2]] 
     return await asyncio.gather(*tasks)
