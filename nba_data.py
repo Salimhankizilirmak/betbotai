@@ -122,3 +122,52 @@ def get_nba_top_players(team_id):
         logging.error(f"Error fetching NBA player stats: {e}")
         return ""
 
+def get_nba_player_game_stat(player_name, date_str, stat_type):
+    """
+    Belirli bir tarihteki maçta oyuncunun istatistiğini getirir.
+    date_str: '2026-03-27T03:00:00Z' formatında (Odds API commence_time)
+    stat_type: 'PTS', 'REB', 'AST'
+    """
+    from nba_api.stats.static import players as nba_players
+    from nba_api.stats.endpoints import playergamelog
+    
+    try:
+        search = nba_players.find_players_by_full_name(player_name)
+        if not search:
+            return None
+        player_id = search[0]['id']
+        
+        # Tarihi 'YYYY-MM-DD' formatına çevir
+        target_date = date_str.split('T')[0]
+        
+        logging.info(f"Resolving NBA Prop: {player_name} on {target_date} for {stat_type}")
+        
+        log = playergamelog.PlayerGameLog(player_id=player_id, season='2025-26', timeout=10).get_data_frames()[0]
+        
+        # Tarihe göre filtrele
+        # NBA API tarih formatı GENELDE 'MAR 27, 2026' gibi olabilir, 
+        # ama GAME_DATE sütunu YYYY-MM-DD olabiliyor veya filtrelemek gerekebilir.
+        log['GAME_DATE'] = pd.to_datetime(log['GAME_DATE'])
+        match = log[log['GAME_DATE'].dt.strftime('%Y-%m-%d') == target_date]
+        
+        if not match.empty:
+            actual_val = match.iloc[0].get(stat_type, 0)
+            logging.info(f"Found NBA Stat: {player_name} {stat_type} = {actual_val}")
+            return float(actual_val)
+        else:
+            # Belki tarih 1 gün kaymıştır (Timezone)
+            from datetime import datetime, timedelta
+            dt = datetime.strptime(target_date, '%Y-%m-%d')
+            prev_date = (dt - timedelta(days=1)).strftime('%Y-%m-%d')
+            next_date = (dt + timedelta(days=1)).strftime('%Y-%m-%d')
+            
+            for d in [prev_date, next_date]:
+                match = log[log['GAME_DATE'].dt.strftime('%Y-%m-%d') == d]
+                if not match.empty:
+                    actual_val = match.iloc[0].get(stat_type, 0)
+                    return float(actual_val)
+
+        return None
+    except Exception as e:
+        logging.error(f"Error resolving NBA player stat: {e}")
+        return None
