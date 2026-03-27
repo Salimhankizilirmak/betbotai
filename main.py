@@ -1,26 +1,35 @@
 import os
 import time
+import logging
+import asyncio
+import json
+import re
+from datetime import datetime
+from fastapi import FastAPI, BackgroundTasks, Request, Query
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from oddsapi_client import get_odds, get_scores
+from ai_analyzer import analyze_event, AI_CACHE, NBA_PROPS_CACHE
+from bet_manager import (
+    place_virtual_bet, 
+    get_pending_sports, 
+    resolve_bet_status, 
+    check_bet_exists,
+    get_current_balance,
+    calculate_kelly_stake,
+    get_performance_metrics,
+    fuzzy_match
+)
+from nba_player_props import analyze_nba_player_props
+from dotenv import load_dotenv
 
-# Sunucu saatini Türkiye saatine zorla
+# GLOBAL TIMEZONE SYNC
 os.environ['TZ'] = 'Europe/Istanbul'
 if hasattr(time, 'tzset'):
     time.tzset()
 
-import logging
-import asyncio
-import json
-from fastapi import FastAPI, Request, Query
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from oddsapi_client import get_odds, get_scores
-from ai_analyzer import analyze_event, AI_CACHE, save_cache
-from bet_manager import init_db, place_virtual_bet, get_bet_history, resolve_bet_status, get_pending_sports, check_bet_exists
-from nba_player_props import analyze_nba_player_props, get_nba_event_props
-from dotenv import load_dotenv
-
 load_dotenv()
 
-NBA_PROPS_CACHE = {"data": [], "last_updated": 0}
 
 # Setup logging
 if not os.path.exists("logs"):
@@ -188,6 +197,15 @@ async def check_and_resolve_all_pending_bets():
                             h_score = int(s1) if n1 == home_team else int(s2)
                             a_score = int(s2) if n1 == home_team else int(s1)
                             
+                            # İSİM EŞLEŞTİRMESİNDE FUZZY MATCH KULLAN
+                            # Eğer n1 vs home_team eşleşmezse fuzzy match ile kontrol et
+                            from bet_manager import fuzzy_match
+                            if not fuzzy_match(n1, home_team):
+                                # Eğer n1 home_team değilse, n1 away_team mi diye bak
+                                if fuzzy_match(n1, event.get('away_team', '')):
+                                    h_score = int(s2)
+                                    a_score = int(s1)
+                            
                             winner = "DRAW"
                             if h_score > a_score: winner = "HOME_WIN"
                             elif a_score > h_score: winner = "AWAY_WIN"
@@ -213,30 +231,39 @@ async def get_safe_mode_multiplier():
         pass
     return 1.0
 
-def should_we_bet(analysis, event):
+def verify_and_place_bet(analysis, event):
     """
-    ÜÇLÜ SÜZGEÇ (Triple Sieve) Karar Motoru
-    1. Konsensüs (Olasılık) >= 65
-    2. Risk Skoru < 40
-    3. Oran Doğrulaması: 1.35 - 4.00
+    SÜPER MASTER SÜZGEÇ (Sieve) Motoru
+    1. Sayısal Kanıt: Analiz metninde en az 2 rakam/istatistik bulunmalı.
+    2. Konsensüs (Olasılık) >= 65
+    3. Risk Skoru < 35 (Sıkılaştırıldı)
+    4. Oran Doğrulaması: 1.35 - 4.00
     """
     if not analysis or analysis.get("bet_target") == "N/A":
         return False, "Geçersiz analiz"
     
     import ai_analyzer
+    import re
+    
+    analysis_text = analysis.get("analysis", "")
     prob = ai_analyzer.safe_int_extract(analysis.get("win_probability"), 0)
-    risk = ai_analyzer.safe_int_extract(analysis.get("risk_score"), 99)
+    risk = ai_analyzer.safe_int_extract(analysis.get("risk_score"), 100)
     odds = analysis.get("odds_value", 0.0)
     
-    # 1. Filtre: Olasılık (AI Konsensüsü)
+    # 1. Filtre: Sayısal Kanıt Kontrolü (Min 2 Rakam/İstatistik)
+    numbers = re.findall(r'\d+', analysis_text)
+    if len(numbers) < 2:
+        return False, f"Zayıf Analiz (Yetersiz Sayısal Veri: {len(numbers)} rakam)"
+
+    # 2. Filtre: Olasılık (AI Konsensüsü)
     if prob < 65:
         return False, f"Düşük Olasılık (%{prob})"
         
-    # 2. Filtre: Risk Skoru
-    if risk >= 40:
+    # 3. Filtre: Risk Skoru
+    if risk >= 35:
         return False, f"Yüksek Risk (Score: {risk})"
         
-    # 3. Filtre: Oran Doğrulaması
+    # 4. Filtre: Oran Doğrulaması
     try:
         odds = float(odds)
     except:
@@ -245,14 +272,17 @@ def should_we_bet(analysis, event):
     if odds < 1.35 or odds > 4.00:
         return False, f"Oran Kapsam Dışı ({odds})"
         
-    return True, "Süzgeçten Geçti"
+    return True, "Master Süzgeçten Geçti"
 
 async def background_resolver():
-    logging.info("Background resolver started.")
+    logging.info("Background results resolver (independent) started.")
     await asyncio.sleep(5)
     while True:
-        await check_and_resolve_all_pending_bets()
-        await asyncio.sleep(1800)
+        try:
+            await check_and_resolve_all_pending_bets()
+        except Exception as e:
+            logging.error(f"Resolver task error: {e}")
+        await asyncio.sleep(900) # 15 dakika (1800'den düşürüldü)
 
 async def background_analyzer():
     logging.info("Background analyzer started.")
@@ -293,8 +323,8 @@ async def background_analyzer():
                     
                         if not res: continue
 
-                        # ÜÇLÜ SÜZGEÇ: Analizden Karara Geçiş
-                        is_ok, reason = should_we_bet(res, match)
+                        # SÜPER MASTER SÜZGEÇ: Analizden Karara Geçiş
+                        is_ok, reason = verify_and_place_bet(res, match)
                         
                         if is_ok:
                             logging.info(f"✅ BAHİS ONAYLANDI: {match['home_team']} vs {match['away_team']} | {reason}")
@@ -349,29 +379,33 @@ async def background_props_analyzer():
                 NBA_PROPS_CACHE["last_updated"] = time.time()
                 logging.info(f"Otonom NBA Props Cache Güncellendi: {len(all_recs)} patlama bulundu.")
                 
-                # OTOMATİK PROP BAHİSİ (Üçlü Süzgeç benzeri kontrol)
+                # OTOMATİK PROP BAHİSİ (Süper Master Süzgeç Entegrasyonu)
                 prop_count = 0
                 for prop in all_recs[:15]: # En iyi 15 prop'u incele
-                    if prop["confidence"] >= 75: # Props için eşik 75%
+                    # Prop için analiz nesnesi oluştur
+                    analysis = {
+                        "bet_target": prop["bet_target"],
+                        "odds_value": prop["over_odds"],
+                        "win_probability": prop["confidence"],
+                        "risk_score": 100 - prop["confidence"], # Props için risk ters orantılı
+                        "analysis": prop["reason"]
+                    }
+                    
+                    # SÜZGEÇ KONTROLÜ
+                    is_ok, reason = verify_and_place_bet(analysis, {"id": prop["event_id"]})
+                    
+                    if is_ok:
                         match_id = f"PROP_{prop['event_id']}_{prop['player']}_{prop['stat']}"
                         exists = await asyncio.to_thread(check_bet_exists, match_id)
                         
                         if not exists:
-                            # Prop için analiz nesnesi oluştur
-                            analysis = {
-                                "bet_target": prop["bet_target"],
-                                "odds_value": prop["over_odds"],
-                                "win_probability": prop["confidence"],
-                                "risk_score": 100 - prop["confidence"], # Props için risk ters orantılı
-                                "analysis": prop["reason"]
-                            }
+                            logging.info(f"✅ PROP ONAYLANDI: {prop['player']} {prop['stat']} | {reason}")
                             
                             # Güvenli Mod
                             multiplier = await get_safe_mode_multiplier()
                             
-                            import bet_manager
-                            current_bal = bet_manager.get_current_balance()
-                            kelly_stake = bet_manager.calculate_kelly_stake(prop["over_odds"], prop["confidence"], current_bal)
+                            current_bal = get_current_balance()
+                            kelly_stake = calculate_kelly_stake(prop["over_odds"], prop["confidence"], current_bal)
                             final_stake = round(kelly_stake * multiplier, 2)
                             
                             # Maç nesnesini taklit et
@@ -383,9 +417,12 @@ async def background_props_analyzer():
                                 "commence_time": datetime.now().isoformat()
                             }
                             
-                            await asyncio.to_thread(bet_manager.place_virtual_bet, mock_match, analysis, custom_amount=final_stake)
+                            await asyncio.to_thread(place_virtual_bet, mock_match, analysis, custom_amount=final_stake)
                             prop_count += 1
                             if prop_count >= 5: break # Bir kerede max 5 prop bahsi
+                    else:
+                        if prop["confidence"] >= 75: # Sadece yüksek güvenli olanları logla
+                            logging.info(f"❌ PROP REDDEDİLDİ: {prop['player']} {prop['stat']} | {reason}")
 
         except Exception as e:
             logging.error(f"Background props analyzer error: {e}")

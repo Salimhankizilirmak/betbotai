@@ -85,7 +85,7 @@ def get_db_connection():
 def get_performance_metrics():
     """
     AI'nın öğrenmesi için son 20 bahsin istatistiklerini hesaplar.
-    Hangi liglerde başarılı olduğumuzu ve oran aralıklarını döner.
+    Hangi liglerde başarılı/başarısız olduğumuzu döner.
     """
     try:
         with get_db_connection() as conn:
@@ -97,8 +97,8 @@ def get_performance_metrics():
             if not rows:
                 return "Henüz yeterli veri yok."
             
-            wins = sum(1 for r in rows if r['status'] == 'WON')
             total = len(rows)
+            wins = sum(1 for r in rows if r['status'] == 'WON')
             win_rate = (wins / total) * 100
             
             # Lig bazlı başarı
@@ -111,10 +111,19 @@ def get_performance_metrics():
             
             league_stats = ", ".join([f"{l}: %{(s['wins']/s['total']*100):.0f}" for l, s in leagues.items()])
             
-            return f"Son {total} Maç Başarı Oranı: %{win_rate:.0f}. Lig Bazlı: {league_stats}."
+            # En çok kaybettiren ligi bul
+            worst_league = "Yok"
+            min_rate = 101
+            for l, s in leagues.items():
+                rate = (s['wins'] / s['total']) * 100
+                if rate < min_rate:
+                    min_rate = rate
+                    worst_league = l
+            
+            return f"Başarı Oranı: %{win_rate:.0f}. En Başarısız Lig: {worst_league}. Lig Detayları: {league_stats}."
     except Exception as e:
         logging.error(f"Metrics error: {e}")
-        return "Performans verisi şu an alınamıyor."
+        return "Performans verisi çekilemedi."
 
 def get_current_balance(start_balance=10000.0):
     """Veritabanındaki kâr/zarar durumuna göre güncel bakiyeyi hesaplar."""
@@ -237,8 +246,7 @@ def get_recent_performance(limit=10):
     AI'nın öğrenmesi için son maçların sonuçlarını özetler.
     """
     try:
-        with sqlite3.connect(DATABASE_FILE) as conn:
-            conn.row_factory = sqlite3.Row
+        with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM bets WHERE status != 'PENDING' ORDER BY created_at DESC LIMIT ?", (limit,))
             rows = cursor.fetchall()
@@ -275,7 +283,7 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
     Bahis sonucunu günceller ve kar/zarar hesaplar.
     """
     try:
-        with sqlite3.connect(DATABASE_FILE) as conn:
+        with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT bet_target, odds_value, bet_amount, home_team, away_team FROM bets WHERE match_id = ? AND status = 'PENDING'", (match_id,))
             bet = cursor.fetchone()
