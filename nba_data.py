@@ -38,8 +38,8 @@ def fetch_nba_h2h(team_a_id, team_b_id):
         logging.info(f"Fetching H2H stats for teams {team_a_id} and {team_b_id}")
         gamefinder = leaguegamefinder.LeagueGameFinder(team_id_nullable=team_a_id, vs_team_id_nullable=team_b_id).get_data_frames()[0]
         
-        # Sadece bu sezonu filtrele (2024-25)
-        current_season_games = gamefinder[gamefinder['SEASON_ID'].str.contains('22024')] # 2 -> Regular Season, 2024 -> Year
+        # Sadece bu sezonu filtrele (2025-26)
+        current_season_games = gamefinder[gamefinder['SEASON_ID'].str.contains('22025')] # 2 -> Regular Season, 2025 -> Year
         
         results = []
         for _, row in current_season_games.iterrows():
@@ -103,7 +103,7 @@ def get_nba_top_players(team_id):
         
     try:
         logging.info(f"Fetching player stats for Team ID: {team_id}")
-        dash = teamplayerdashboard.TeamPlayerDashboard(team_id=team_id, season='2024-25', timeout=10).get_data_frames()[1]
+        dash = teamplayerdashboard.TeamPlayerDashboard(team_id=team_id, season='2025-26', timeout=10).get_data_frames()[1]
         
         # Sort by PTS
         top_scorers = dash.sort_values(by='PTS', ascending=False).head(3)
