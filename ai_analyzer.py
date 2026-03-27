@@ -23,7 +23,11 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 # Clients
-client = genai.Client(api_key=GEMINI_API_KEY)
+# Clients
+client = genai.Client(
+    api_key=GEMINI_API_KEY,
+    http_options={'api_version': 'v1'} # v1beta yerine stable v1 kullan
+)
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 # Groq API'sini OpenAI kütüphanesi üzerinden çağırıyoruz (Daha stabil)
 groq_client = OpenAI(
@@ -34,8 +38,7 @@ groq_client = OpenAI(
 # Modeller
 AI_MODELS = [
     'gemini-1.5-flash',
-    'gemini-1.5-flash-8b',
-    'gemini-2.0-flash-exp'
+    'gemini-1.5-flash-8b'
 ]
 OPENAI_MODEL = "gpt-4o-mini"
 
@@ -159,6 +162,32 @@ async def analyze_with_fallback(prompt):
 
     return "Alternatif modeller de başarısız oldu."
 
+async def rule_based_analysis(match_data, home_stats, away_stats):
+    """AI tamamen fail olursa istatistiklere dayalı basit kural motoru."""
+    home_name = match_data.get('home_team', 'Ev')
+    away_name = match_data.get('away_team', 'Deplasman')
+    logging.info(f"AI başarısız, {home_name} vs {away_name} için Kural Tabanlı Karar kullanılıyor.")
+    
+    # Basit bir puanlama mantığı (Geliştirmeye açık)
+    home_score = 50
+    # İstatistiklerden anahtar kelime/değer yakalamaya çalış (data_loader çıktılarına göre)
+    if "form: %" in str(home_stats).lower():
+        # "form: %80" gibi bir yapı varsa
+        matches = re.findall(r'%(\d+)', str(home_stats))
+        if matches: home_score = int(matches[0])
+    
+    win_prob = home_score
+    bet_target = "HOME_WIN" if win_prob > 55 else ("AWAY_WIN" if win_prob < 45 else "DRAW")
+    
+    return {
+        "risk_score": 50,
+        "win_probability": win_prob,
+        "bet_target": bet_target,
+        "odds_value": 0.0,
+        "recommendation": "Kural Tabanlı Öneri",
+        "analysis": f"AI modelleri yanıt vermediği için H2H ve form istatistiklerine dayalı otomatik karar verildi. (Tahmin: {win_prob}%)"
+    }
+
 async def analyze_with_openai(prompt):
     """OpenAI GPT-4o-mini ile analiz yapar."""
     try:
@@ -175,6 +204,7 @@ async def analyze_with_openai(prompt):
 async def calculate_risk(match_data):
     """
     Gemini, OpenAI ve Fallback modelleri kullanarak işbirlikçi maç analizi yapar.
+    Tüm adım Gemini hatalarına karşı global fallback içerir.
     """
     default_resp = {
         "risk_score": 99, 
@@ -202,86 +232,70 @@ async def calculate_risk(match_data):
 
     past_performance = get_recent_performance(limit=10)
 
-    # 1. ADIM: Gemini İlk Analizi
-    gemini_initial_prompt = f"""
-Uzman bir spor analisti olarak şu maçı detaylıca analiz et:
-{json.dumps(match_data, indent=2)}
-İstatistikler:
-Ev: {home_stats}
-Deplasman: {away_stats}
-Geçmiş Performansımız: {past_performance}
-
-Analizinde sakatlıklar, form durumu ve değerli bahis seçeneklerini değerlendir. Sadece analiz metni dön.
-"""
-    
-    gemini_analysis = ""
-    for model_name in AI_MODELS:
-        resp = await retry_with_backoff(client.aio.models.generate_content, model=model_name, contents=gemini_initial_prompt)
-        if resp:
-            gemini_analysis = resp.text
-            break
-    
-    # Eğer Gemini tamamen fail olursa fallback kullan
-    if not gemini_analysis:
-        gemini_analysis = await analyze_with_fallback(gemini_initial_prompt[:2000] + "\nLütfen bu maçı analiz et.")
-
-    if "başarısız oldu" in gemini_analysis:
-        return default_resp
-
-    await asyncio.sleep(5) # API'ye nefes aldır
-
-    # 2. ADIM: OpenAI "Şeytanın Avukatı"
-    openai_prompt = f"""
-Sen deneyimli bir bahis uzmanısın. Yapılan şu analizi eleştir ve karşı görüşlerini sun:
-Maç: {home_name} vs {away_name}
-Analiz: {gemini_analysis}
-
-Atlanan riskleri veya daha mantıklı bahis seçeneklerini belirt. Objektif ve katı ol.
-"""
-    openai_critique = await analyze_with_openai(openai_prompt)
-    if "başarısız oldu" in openai_critique:
-        logging.warning("OpenAI critique failed, continuing with fallback models...")
-        openai_critique = "OpenAI kotası bittiği için eleştiri yapılamadı, Groq/OpenRouter ile devam ediliyor."
-
-    await asyncio.sleep(5) # API'ye nefes aldır
-
-    # 3. ADIM: Gemini Final Kararı (Veya Fallback)
-    final_prompt = f"""
-Sen 'BetBot Baron' AI'sısın. İlk analiz ve OpenAI'ın eleştirileri doğrultusunda son kararını ver. TÜM ANALİZİ TÜRKÇE YAP.
-Maç Verisi: {json.dumps(match_data)}
-İlk Analiz: {gemini_analysis}
-OpenAI Eleştirisi: {openai_critique}
-
-- Oranı 1.35 altı olan "garanti" bahisleri önerme.
-- En çok güvendiğin KESİN bahis hedefini 'bet_target' alanına yaz. (HOME_WIN, AWAY_WIN, DRAW, OVER 2.5, UNDER 2.5 vb.)
-- SADECE RAW JSON FORMATINDA DÖN VE 'analysis' ALANINI TÜRKÇE DOLDUR:
-{{"risk_score": int (0-100), "win_probability": int (0-100), "bet_target": "string", "odds_value": float, "recommendation": "string", "analysis": "string"}}
-"""
-
-    final_result_text = ""
-    for model_name in AI_MODELS:
-        resp = await retry_with_backoff(client.aio.models.generate_content, model=model_name, contents=final_prompt)
-        if resp:
-            final_result_text = resp.text
-            break
-    
-    if not final_result_text:
-        final_result_text = await analyze_with_fallback(final_prompt)
-
+    # GLOBAL FALLBACK WRAPPER
     try:
+        # 1. ADIM: Gemini İlk Analizi
+        gemini_initial_prompt = f"Uzman analist olarak şu maçı analiz et: {json.dumps(match_data, indent=2)}\nİstatistikler:\nEv: {home_stats}\nDeplasman: {away_stats}\nPerformans: {past_performance}\nSadece analiz metni dön."
+        
+        gemini_analysis = ""
+        for model_name in AI_MODELS:
+            resp = await retry_with_backoff(client.aio.models.generate_content, model=model_name, contents=gemini_initial_prompt)
+            if resp:
+                gemini_analysis = resp.text
+                break
+        
+        if not gemini_analysis:
+            raise Exception("Gemini Analiz Yapamadı")
+
+        await asyncio.sleep(5)
+
+        # 2. ADIM: OpenAI Kritik (Fallback içerebilir)
+        openai_prompt = f"Şu analizi eleştir: {gemini_analysis}\nMaç: {home_name} vs {away_name}"
+        openai_critique = await analyze_with_openai(openai_prompt)
+        if "başarısız oldu" in openai_critique:
+            openai_critique = "OpenAI kotası bitti, direkt son karara geçiliyor."
+
+        await asyncio.sleep(5)
+
+        # 3. ADIM: Gemini Final Kararı
+        final_prompt = f"Sen 'BetBot Baron' AI'sısın. Son kararını ver. TÜRKÇE YAP.\nİlk Analiz: {gemini_analysis}\nEleştiri: {openai_critique}\nSADECE RAW JSON DÖN:\n{{\"risk_score\": int (0-100), \"win_probability\": int (0-100), \"bet_target\": \"string\", \"odds_value\": float, \"recommendation\": \"string\", \"analysis\": \"string\"}}"
+        
+        final_result_text = ""
+        for model_name in AI_MODELS:
+            resp = await retry_with_backoff(client.aio.models.generate_content, model=model_name, contents=final_prompt)
+            if resp:
+                final_result_text = resp.text
+                break
+        
+        if not final_result_text:
+            raise Exception("Gemini Final Karar Veremedi")
+
         match_json = re.search(r'\{.*\}', final_result_text, re.DOTALL)
         if match_json:
             analysis = json.loads(match_json.group())
-            analysis["analysis"] = f"AI Sentez: {gemini_analysis[:150]}... | Eleştiri: {openai_critique[:150]}... | Sonuç: {analysis.get('analysis', '')}"
-            
+            analysis["analysis"] = f"AI Sentez: {gemini_analysis[:100]}... | Sonuç: {analysis.get('analysis', '')}"
             real_odds = extract_real_odds(match_data, analysis.get("bet_target", ""))
             if real_odds > 1.0: analysis["odds_value"] = real_odds
-            
             return analysis
-    except Exception as e:
-        logging.error(f"Final parse error: {e}")
 
-    return default_resp
+    except Exception as e:
+        logging.warning(f"AI Analiz Süreci Gemini ile Başarısız: {e}. Fallback (Groq/OpenRouter) deneniyor...")
+        # Groq/OpenRouter üzerinden TÜM ANALİZİ TEK SEFERDE YAP
+        fallback_prompt = f"MAÇ: {home_name} vs {away_name}\nSTAT: {home_stats} vs {away_stats}\nJSON formatında şu alanları içeren son analizini yap: risk_score, win_probability, bet_target, odds_value, recommendation, analysis"
+        fallback_text = await analyze_with_fallback(fallback_prompt)
+        
+        try:
+            match_json = re.search(r'\{.*\}', fallback_text, re.DOTALL)
+            if match_json:
+                analysis = json.loads(match_json.group())
+                real_odds = extract_real_odds(match_data, analysis.get("bet_target", ""))
+                if real_odds > 1.0: analysis["odds_value"] = real_odds
+                return analysis
+        except:
+            pass
+            
+    # HİÇBİR ŞEY ÇALIŞMAZSA KURAL TABANLI MOD
+    return await rule_based_analysis(match_data, home_stats, away_stats)
 
 
 async def analyze_event(event):
@@ -300,8 +314,8 @@ async def analyze_event(event):
                     for out in mkt.get("outcomes", []):
                         best_odds = max(best_odds, out.get("price", 0))
     
-    # Eğer oranlar 1.35 - 5.00 dışında ise (çok garanti veya çok riskli) AI'ya sormayalım
-    if best_odds > 0 and (best_odds < 1.35 or best_odds > 5.00):
+    # Eğer oranlar 1.30 - 6.00 dışında ise (çok garanti veya çok riskli) AI'ya sormayalım
+    if best_odds > 0 and (best_odds < 1.30 or best_odds > 6.00):
         logging.info(f"Skipping {home_team} vs {away_team} due to odds ({best_odds}) outside target range.")
         return {
             "risk_score": 0, 
