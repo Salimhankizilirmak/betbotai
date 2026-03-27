@@ -19,6 +19,7 @@ from nba_data import get_nba_team_stats
 from bet_manager import place_virtual_bet, get_recent_performance, get_performance_metrics
 from nba_player_props import analyze_nba_player_props
 from euroleague_data import get_euroleague_team_stats, get_euroleague_player_trends
+from premier_league_data import get_pl_team_stats, get_pl_player_trends
 
 load_dotenv()
 
@@ -274,6 +275,14 @@ async def calculate_risk(match_data):
                 player_prop_trends = await get_euroleague_player_trends(home_name)
             except Exception as e:
                 logging.error(f"Euroleague stats error: {e}")
+        elif "premier_league" in sport_key:
+            # Premier League İstatistik Entegrasyonu
+            try:
+                home_stats = await get_pl_team_stats(home_name)
+                away_stats = await get_pl_team_stats(away_name)
+                player_prop_trends = await get_pl_player_trends(home_name)
+            except Exception as e:
+                logging.error(f"Premier League stats error: {e}")
 
     past_performance = get_recent_performance(limit=10)
     ai_metrics = get_performance_metrics()
