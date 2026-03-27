@@ -4,10 +4,10 @@ import asyncio
 from difflib import SequenceMatcher
 
 # Euroleague API Feeds (Internal Incrowd Feeds)
-URL_PLAYER_STATS = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v3/competitions/E/statistics/players/traditional?seasonMode=All&limit=400&sortDirection=descending&statisticMode=perGame&statisticSortMode=perGame"
-URL_TEAM_SCORE = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v2/competitions/E/stats/clubs/leaders?category=Score&seasonMode=All&limit=200&aggregate=perGame"
-URL_TEAM_REBOUNDS = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v2/competitions/E/stats/clubs/leaders?category=TotalRebounds&seasonMode=All&limit=200&aggregate=perGame"
-URL_TEAM_ASSISTS = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v2/competitions/E/stats/clubs/leaders?category=Assists&seasonMode=All&limit=200&aggregate=perGame"
+URL_PLAYER_STATS = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v3/competitions/E/statistics/players/traditional?seasonCode=E2025&seasonMode=All&limit=400&sortDirection=descending&statisticMode=perGame&statisticSortMode=perGame"
+URL_TEAM_SCORE = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v2/competitions/E/stats/clubs/leaders?category=Score&seasonCode=E2025&seasonMode=All&limit=200&aggregate=perGame"
+URL_TEAM_REBOUNDS = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v2/competitions/E/stats/clubs/leaders?category=TotalRebounds&seasonCode=E2025&seasonMode=All&limit=200&aggregate=perGame"
+URL_TEAM_ASSISTS = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v2/competitions/E/stats/clubs/leaders?category=Assists&seasonCode=E2025&seasonMode=All&limit=200&aggregate=perGame"
 
 # Caches
 _euro_cache = {
