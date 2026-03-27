@@ -43,6 +43,24 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+
+    // Baron Raporu Toggle Listener
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('.toggle-analysis')) {
+            const btn = e.target.closest('.toggle-analysis');
+            const card = btn.closest('.match-card');
+            const content = card.querySelector('.baron-report-content');
+            const icon = btn.querySelector('i');
+            
+            if (content.style.maxHeight) {
+                content.style.maxHeight = null;
+                btn.innerHTML = '<i class="fa-solid fa-chevron-down"></i> Analizi Gör';
+            } else {
+                content.style.maxHeight = content.scrollHeight + "px";
+                btn.innerHTML = '<i class="fa-solid fa-chevron-up"></i> Analizi Gizle';
+            }
+        }
+    });
 });
 
 async function fetchMatches(recommendedOnly = true) {
@@ -138,13 +156,13 @@ function renderMatches(matches, recommendedOnly, targetId) {
             analysisHtml = `
             <div class="ai-analysis">
                 <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">Baron'un Kesin Kararı (${betAmount} BB)</div>
-                <div class="target" style="color: ${targetColor}">
+                <div class="target" style="color: ${targetColor}; font-weight: 800; font-size: 16px;">
                     ${ai.bet_target || 'N/A'} @ ${(ai.odds_value || 0).toFixed(2)}
                 </div>
                 
                 <div style="margin-top: 15px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
                     <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; display: flex; justify-content: space-between;">
-                        <span>Kazanma Olasılığı</span>
+                        <span>Güven Skoru</span>
                         <span style="color: var(--text-primary); font-weight: 600;">%${(ai.win_probability || 0).toFixed(0)}</span>
                     </div>
                     <div class="progress-bar">
@@ -152,9 +170,18 @@ function renderMatches(matches, recommendedOnly, targetId) {
                     </div>
                 </div>
                 
-                <div style="margin-top: 15px; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; border-left: 3px solid ${targetColor}; font-size: 12px; line-height: 1.5; color: #cbd5e1; max-height: 120px; overflow-y: auto;">
-                    <div style="font-weight: bold; margin-bottom: 6px; color: #fff;"><i class="fa-solid fa-brain"></i> Baron Raporu</div>
-                    ${ai.analysis ? ai.analysis.replace(/\n/g, '<br>') : 'Analiz detayı bulunamadı.'}
+                <div class="baron-report-container" style="margin-top: 15px;">
+                    <button class="toggle-analysis" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--panel-border); color: var(--text-secondary); padding: 8px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <i class="fa-solid fa-chevron-down"></i> Analizi Gör
+                    </button>
+                    <div class="baron-report-content" style="max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; background: rgba(0,0,0,0.2); border-radius: 0 0 8px 8px; font-size: 12px; line-height: 1.6; color: #cbd5e1;">
+                        <div style="padding: 15px; border-left: 3px solid ${targetColor};">
+                            <div style="font-weight: bold; margin-bottom: 8px; color: #fff; display: flex; align-items: center; gap: 6px;">
+                                <i class="fa-solid fa-brain"></i> Baron Raporu
+                            </div>
+                            ${ai.analysis ? ai.analysis.replace(/\n/g, '<br>') : 'Analiz detayı bulunamadı.'}
+                        </div>
+                    </div>
                 </div>
             </div>`;
         }
