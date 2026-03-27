@@ -15,23 +15,27 @@ load_dotenv()
 
 def send_telegram_message(text: str):
     token = os.getenv("TELEGRAM_BOT_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
-    if not token or not chat_id:
+    chat_ids_str = os.getenv("TELEGRAM_CHAT_IDS") or os.getenv("TELEGRAM_CHAT_ID")
+    if not token or not chat_ids_str:
         return
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = urllib.parse.urlencode({
-        "chat_id": chat_id,
-        "text": text,
-        "parse_mode": "HTML"
-    }).encode("utf-8")
-    try:
-        logging.info(f"Sending Telegram message to {chat_id}...")
-        req = urllib.request.Request(url, data=payload)
-        with urllib.request.urlopen(req, timeout=10) as response:
-            res_body = response.read().decode("utf-8")
-            logging.info(f"Telegram response: {res_body}")
-    except Exception as e:
-        logging.error(f"Telegram webhook failed: {e}")
+    
+    chat_ids = [c.strip() for c in chat_ids_str.split(",")]
+    
+    for chat_id in chat_ids:
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = urllib.parse.urlencode({
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML"
+        }).encode("utf-8")
+        try:
+            logging.info(f"Sending Telegram message to {chat_id}...")
+            req = urllib.request.Request(url, data=payload)
+            with urllib.request.urlopen(req, timeout=10) as response:
+                res_body = response.read().decode("utf-8")
+                logging.info(f"Telegram response for {chat_id}: {res_body}")
+        except Exception as e:
+            logging.error(f"Telegram execution failed for {chat_id}: {e}")
 
 DATABASE_FILE = os.path.join("data", "bets.db")
 BET_AMOUNT = 100.0  # Sanal 100 BB
@@ -211,9 +215,10 @@ def place_virtual_bet(event, ai_analysis, custom_amount=None):
                 conn.commit()
             
             # Telegram bildirimi gönder
+            sport_icon = "⚽" if "soccer" in str(sport_key).lower() else "🏀"
             msg = (
                 f"🚨 <b>YENİ BAHİS ALINDI (Çeyrek Kelly: %25)</b>\n\n"
-                f"🏀 <b>Maç:</b> {home_team} vs {away_team}\n"
+                f"{sport_icon} <b>Maç:</b> {home_team} vs {away_team}\n"
                 f"🎯 <b>Hedef:</b> {bet_target}\n"
                 f"📈 <b>Oran:</b> {odds_value}\n"
                 f"💰 <b>Miktar:</b> {amount} BB (Kasa: {get_current_balance():.2f})\n\n"
@@ -274,8 +279,18 @@ def check_bet_exists(match_id):
 def fuzzy_match(name1, name2, threshold=0.7):
     """İki takım isminin benzerliğini kontrol eder (Lakers vs LA Lakers)."""
     if not name1 or not name2: return False
-    n1, n2 = name1.lower(), name2.lower()
+    n1, n2 = str(name1).lower().strip(), str(name2).lower().strip()
+    
+    # Direkt içerme kontrolü (Fenerbahçe Beko -> Fenerbahçe)
     if n1 in n2 or n2 in n1: return True
+    
+    # Kelime bazlı kontrol (Örn: "LA Lakers" ve "Lakers" için "Lakers" ortak)
+    words1 = set(n1.split())
+    words2 = set(n2.split())
+    common = words1.intersection(words2)
+    if common and any(len(w) > 3 for w in common): # Kısa kelimeler (FC, SK vb.) hariç
+        return True
+
     return SequenceMatcher(None, n1, n2).ratio() >= threshold
 
 def resolve_bet_status(match_id, winner, h_score=None, a_score=None):

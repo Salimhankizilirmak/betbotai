@@ -5,9 +5,13 @@ import asyncio
 import json
 import re
 from datetime import datetime
+import pytz
 from fastapi import FastAPI, BackgroundTasks, Request, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+
+# Global Timezone: Europe/Istanbul
+IST = pytz.timezone('Europe/Istanbul')
 from oddsapi_client import get_odds, get_scores
 from ai_analyzer import analyze_event, AI_CACHE, NBA_PROPS_CACHE
 from bet_manager import (
@@ -437,7 +441,7 @@ async def background_props_analyzer():
                                 "sport_key": "basketball_nba",
                                 "home_team": prop["home_team"],
                                 "away_team": prop["away_team"],
-                                "commence_time": datetime.now().isoformat()
+                                "commence_time": datetime.now(IST).isoformat()
                             }
                             
                             await asyncio.to_thread(place_virtual_bet, mock_match, analysis, custom_amount=final_stake)
