@@ -26,7 +26,7 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 # Clients
 client = genai.Client(
     api_key=GEMINI_API_KEY,
-    http_options={'api_version': 'v1'} # v1beta yerine stable v1 kullan
+    http_options={'api_version': 'v1beta'} # v1 yerine v1beta kullanarak 404'ü çözün
 )
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 # Groq API'sini OpenAI kütüphanesi üzerinden çağırıyoruz (Daha stabil)
@@ -38,7 +38,7 @@ groq_client = OpenAI(
 # Modeller
 AI_MODELS = [
     'gemini-1.5-flash',
-    'gemini-1.5-flash-8b'
+    'gemini-1.5-pro'
 ]
 OPENAI_MODEL = "gpt-4o-mini"
 
@@ -104,7 +104,7 @@ def extract_real_odds(event, bet_target):
                                     return float(out["price"])
     except Exception:
         pass
-    return 0.0
+    return float(0.0)
 
 async def retry_with_backoff(coro_func, *args, max_retries=3, initial_delay=5, **kwargs):
     """Üssel bekleme (Exponential Backoff) ile API çağrısını tekrar dener."""

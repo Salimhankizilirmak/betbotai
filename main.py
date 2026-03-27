@@ -1,8 +1,14 @@
 import os
+import time
+
+# Sunucu saatini Türkiye saatine zorla
+os.environ['TZ'] = 'Europe/Istanbul'
+if hasattr(time, 'tzset'):
+    time.tzset()
+
 import logging
 import asyncio
 import json
-import time
 from fastapi import FastAPI, Request, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -232,20 +238,26 @@ async def background_analyzer():
                         # Henüz analiz edilmediyse AI'ya sor
                         logging.info(f"Otonom Analiz: {match['home_team']} vs {match['away_team']}")
                         res = await analyze_event(match)
-                    
-                    odds = res.get("odds_value", 0)
-                    if isinstance(odds, dict):
-                        odds = odds.get("value", odds.get("decimal", odds.get("price", 0)))
-                    try:
-                        odds = float(odds)
-                    except (TypeError, ValueError):
-                        odds = 0.0
+                
+                # Güvenli odds çekme işlemi
+                res_odds = res.get("odds_value", 0)
 
-                    if res and res.get("risk_score", 100) < 40 and odds >= 1.35:
-                        import bet_manager
-                        await asyncio.to_thread(bet_manager.place_virtual_bet, match, res)
-                        count += 1
-                        await asyncio.sleep(5)
+                # Eğer odds bir sözlükse içindeki değeri alalım
+                if isinstance(res_odds, dict):
+                    res_odds = res_odds.get("value", res_odds.get("decimal", res_odds.get("price", 0)))
+
+                try:
+                    # Sayıya çevirmeyi garantiye alalım
+                    res_odds = float(res_odds)
+                except (TypeError, ValueError):
+                    res_odds = 0.0
+
+                # Kıyaslamayı şimdi güvenle yapabiliriz
+                if res and res.get("risk_score", 100) < 40 and res_odds >= 1.35:
+                    import bet_manager
+                    await asyncio.to_thread(bet_manager.place_virtual_bet, match, res)
+                    count += 1
+                    await asyncio.sleep(5)
                 
                 if count >= 10: break # Bir döngüde en fazla 10 bahis alsın
         except Exception as e:
