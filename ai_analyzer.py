@@ -84,41 +84,45 @@ def safe_int_extract(val, default=0):
     except (TypeError, ValueError):
         return default
 
+def is_match_analyzable(event):
+    """Maçta h2h veya totals marketi olup olmadığını kontrol eder."""
+    if not event.get("bookmakers"): return False
+    for bkm in event["bookmakers"]:
+        for mkt in bkm.get("markets", []):
+            if mkt["key"] in ["h2h", "totals"]:
+                return True
+    return False
+
 def extract_real_odds(event, bet_target):
     if not event.get("bookmakers"):
         return 0.0
-    home = event.get("home_team")
-    away = event.get("away_team")
+    home = event.get("home_team", "")
+    away = event.get("away_team", "")
     try:
         for bkm in event["bookmakers"][:3]: # İlk 3 bahis şirketinden birini bul
             for market in bkm.get("markets", []):
-                if market["key"] == "h2h" and bet_target in ["HOME_WIN", "AWAY_WIN"]:
-                    target_name = home if bet_target == "HOME_WIN" else away
-                    for out in market["outcomes"]:
-                        if out["name"] == target_name:
-                            return float(out["price"])
-                elif market["key"] == "totals":
-                    # Örn: "OVER 2.5" veya "UNDER 210.5"
-                    parts = bet_target.split()
-                    if len(parts) >= 2:
-                        direction = parts[0].upper() # OVER / UNDER
-                        try:
-                            target_point = float(parts[1])
-                        except:
-                            target_point = None
-                            
+                if market["key"] == "h2h" and bet_target in ["HOME_WIN", "AWAY_WIN", "DRAW"]:
+                    target_name = ""
+                    if bet_target == "HOME_WIN": target_name = home
+                    elif bet_target == "AWAY_WIN": target_name = away
+                    elif bet_target == "DRAW": target_name = "Draw"
+                    
+                    if target_name:
                         for out in market["outcomes"]:
-                            out_name = out["name"].upper() # Over / Under
-                            out_point = out.get("point")
-                            
-                            if out_name == direction:
-                                # Eğer AI bir barem belirttiyse ona en yakın olanı seç
-                                if target_point is not None:
-                                    if abs(out_point - target_point) < 0.1:
-                                        return float(out["price"])
-                                else:
-                                    # Barem belirtilmediyse ilk baremi al
-                                    return float(out["price"])
+                            if out["name"].lower() == target_name.lower():
+                                return float(out["price"])
+                
+                elif market["key"] == "totals" and " " in bet_target:
+                    # Bet target örn: "OVER 2.5", "UNDER 150.5"
+                    parts = bet_target.upper().split()
+                    direction = parts[0] # OVER / UNDER
+                    try:
+                        point = float(parts[1])
+                        for out in market["outcomes"]:
+                            if out["name"].upper() == direction and abs(float(out.get("point", 0)) - point) < 0.1:
+                                return float(out["price"])
+                    except Exception:
+                        pass
     except Exception:
         pass
     return float(0.0)
@@ -258,9 +262,10 @@ async def calculate_risk(match_data):
             f"Şu maçı analiz et: {json.dumps(match_data, indent=2)}\n"
             f"İstatistikler: Ev: {home_stats} | Deplasman: {away_stats}\n"
             f"Önceki Maçlar: {past_performance}\n"
-            f"Genel Başarı Durumun: {ai_metrics}\n\n"
+            f"Başarı Durumun: {ai_metrics}\n\n"
             f"TALİMAT: 'Güçlü kadro' gibi genel ifadelerden kaçın. Sayısal verilere (PTS, REB, AST, Form yüzdesi) dayalı kanıtlar sun.\n"
-            f"Kendi başarı durumuna bakarak (Örn: Euroleague'de kaybediyorsan) daha temkinli veya agresif yorum yap. Sadece analiz metni dön."
+            f"Eğer taraf bahsi (H2H) oranları çok dengesiz veya riskliyse, mutlaka 'Over/Under' (Alt/Üst) seçeneklerini değerlendir.\n"
+            f"Kendi başarı durumuna bakarak daha temkinli veya agresif yorum yap. Sadece analiz metni dön."
         )
         
         gemini_analysis = ""
@@ -360,16 +365,13 @@ async def analyze_event(event):
                     for out in mkt.get("outcomes", []):
                         best_odds = max(best_odds, out.get("price", 0))
     
-    # Eğer oranlar 1.30 - 6.00 dışında ise (çok garanti veya çok riskli) AI'ya sormayalım
-    if best_odds > 0 and (best_odds < 1.30 or best_odds > 6.00):
-        logging.info(f"Skipping {home_team} vs {away_team} due to odds ({best_odds}) outside target range.")
-        return {
-            "risk_score": 0, 
-            "win_probability": 0, 
-            "analysis": f"Oranlar ({best_odds}) hedef aralık dışında olduğu için pas geçildi.", 
-            "bet_target": "N/A", 
-            "is_recommended": False
-        }
+    # Eğer oranlar hedef aralık dışında veya market yoksa default dön (h2h + totals desteği için is_match_analyzable kullanıyoruz)
+    if not is_match_analyzable(event):
+        logging.info(f"Skipping {home_team} vs {away_team}: No valid H2H or Totals markets found.")
+        return default_resp
+    
+    # Not using legacy best_odds filter here anymore, trusting the analyzer or the should_we_bet logic later
+
 
     if event_id in AI_CACHE:
         cached_item = AI_CACHE[event_id]
@@ -411,9 +413,6 @@ async def analyze_event(event):
         AI_CACHE[event_id] = risk_info
         AI_CACHE[event_id]["_cached_at"] = time.time()
         save_cache(AI_CACHE)
-        
-        if risk_info.get("is_recommended") and risk_info.get("bet_target") != "N/A":
-            place_virtual_bet(event, risk_info, custom_amount=stake_amount)
         
     return risk_info
 

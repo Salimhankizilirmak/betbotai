@@ -4,8 +4,12 @@ import logging
 from datetime import datetime
 import urllib.request
 import urllib.parse
+import threading
 from difflib import SequenceMatcher
 from dotenv import load_dotenv
+
+# Global DB Lock for writes
+db_lock = threading.Lock()
 
 load_dotenv()
 
@@ -37,34 +41,35 @@ def init_db():
         if not os.path.exists("data"):
             os.makedirs("data")
         # Multi-thread desteği için check_same_thread=False
-        with sqlite3.connect(DATABASE_FILE, check_same_thread=False) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS bets (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    match_id TEXT UNIQUE,
-                    sport_key TEXT,
-                    home_team TEXT,
-                    away_team TEXT,
-                    commence_time TEXT,
-                    risk_score INTEGER,
-                    bet_target TEXT,
-                    odds_value REAL,
-                    bet_amount REAL DEFAULT 100.0,
-                    status TEXT DEFAULT 'PENDING',
-                    profit REAL DEFAULT 0.0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
-            # Migration check: Add bet_amount if it doesn't exist
-            cursor.execute("PRAGMA table_info(bets)")
-            columns = [column[1] for column in cursor.fetchall()]
-            if 'bet_amount' not in columns:
-                cursor.execute("ALTER TABLE bets ADD COLUMN bet_amount REAL DEFAULT 100.0")
-                logging.info("Database migration: Added bet_amount column.")
+        with db_lock:
+            with sqlite3.connect(DATABASE_FILE, check_same_thread=False) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS bets (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        match_id TEXT UNIQUE,
+                        sport_key TEXT,
+                        home_team TEXT,
+                        away_team TEXT,
+                        commence_time TEXT,
+                        risk_score INTEGER,
+                        bet_target TEXT,
+                        odds_value REAL,
+                        bet_amount REAL DEFAULT 100.0,
+                        status TEXT DEFAULT 'PENDING',
+                        profit REAL DEFAULT 0.0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
                 
-            conn.commit()
+                # Migration check: Add bet_amount if it doesn't exist
+                cursor.execute("PRAGMA table_info(bets)")
+                columns = [column[1] for column in cursor.fetchall()]
+                if 'bet_amount' not in columns:
+                    cursor.execute("ALTER TABLE bets ADD COLUMN bet_amount REAL DEFAULT 100.0")
+                    logging.info("Database migration: Added bet_amount column.")
+                    
+                conn.commit()
     except Exception as e:
         logging.error(f"Database init error: {e}")
 
@@ -162,7 +167,7 @@ def place_virtual_bet(event, ai_analysis, custom_amount=None):
     match_id = event.get('id')
     
     try:
-        with sqlite3.connect(DATABASE_FILE) as conn:
+        with get_db_connection() as conn:
             cursor = conn.cursor()
             
             # Check if already bet
@@ -192,7 +197,9 @@ def place_virtual_bet(event, ai_analysis, custom_amount=None):
                 INSERT INTO bets (match_id, sport_key, home_team, away_team, commence_time, risk_score, bet_target, odds_value, bet_amount, status)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
             ''', (match_id, sport_key, home_team, away_team, commence_time, risk_score, bet_target, odds_value, amount))
-            conn.commit()
+            
+            with db_lock:
+                conn.commit()
             
             # Telegram bildirimi gönder
             msg = (
@@ -313,8 +320,9 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
             status = 'WON' if is_winner else 'LOST'
             profit = (amount * safe_odds) - amount if is_winner else -amount
             
-            cursor.execute("UPDATE bets SET status = ?, profit = ? WHERE match_id = ?", (status, profit, match_id))
-            conn.commit()
+            with db_lock:
+                cursor.execute("UPDATE bets SET status = ?, profit = ? WHERE match_id = ?", (status, profit, match_id))
+                conn.commit()
             
             # Telegram bildirimi
             icon = "🟢" if is_winner else "🔴"

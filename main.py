@@ -196,6 +196,57 @@ async def check_and_resolve_all_pending_bets():
     except Exception as e:
         logging.error(f"Error in check_and_resolve_all_pending_bets: {e}")
 
+async def get_safe_mode_multiplier():
+    """Son performansa göre bahis miktar çarpanı döner (Bot zarardaysa miktar düşer)."""
+    try:
+        import bet_manager
+        metrics = bet_manager.get_performance_metrics()
+        # "Son 20 Maç Başarı Oranı: %45" gibi bir metinden oranı çek
+        import re
+        match = re.search(r'%(\d+)', metrics)
+        if match:
+            win_rate = int(match.group(1))
+            if win_rate < 50:
+                logging.warning(f"SİSTEM GÜVENLİ MODDA: Başarı oranı %{win_rate}. Miktarlar yarıya düşürüldü.")
+                return 0.5
+    except:
+        pass
+    return 1.0
+
+def should_we_bet(analysis, event):
+    """
+    ÜÇLÜ SÜZGEÇ (Triple Sieve) Karar Motoru
+    1. Konsensüs (Olasılık) >= 65
+    2. Risk Skoru < 40
+    3. Oran Doğrulaması: 1.35 - 4.00
+    """
+    if not analysis or analysis.get("bet_target") == "N/A":
+        return False, "Geçersiz analiz"
+    
+    import ai_analyzer
+    prob = ai_analyzer.safe_int_extract(analysis.get("win_probability"), 0)
+    risk = ai_analyzer.safe_int_extract(analysis.get("risk_score"), 99)
+    odds = analysis.get("odds_value", 0.0)
+    
+    # 1. Filtre: Olasılık (AI Konsensüsü)
+    if prob < 65:
+        return False, f"Düşük Olasılık (%{prob})"
+        
+    # 2. Filtre: Risk Skoru
+    if risk >= 40:
+        return False, f"Yüksek Risk (Score: {risk})"
+        
+    # 3. Filtre: Oran Doğrulaması
+    try:
+        odds = float(odds)
+    except:
+        odds = 0.0
+        
+    if odds < 1.35 or odds > 4.00:
+        return False, f"Oran Kapsam Dışı ({odds})"
+        
+    return True, "Süzgeçten Geçti"
+
 async def background_resolver():
     logging.info("Background resolver started.")
     await asyncio.sleep(5)
@@ -242,34 +293,29 @@ async def background_analyzer():
                     
                         if not res: continue
 
-                        # Güvenli odds çekme işlemi
-                        res_odds = res.get("odds_value", 0)
-
-                        # Eğer odds bir sözlükse içindeki değeri alalım
-                        if isinstance(res_odds, dict):
-                            res_odds = res_odds.get("value", res_odds.get("decimal", res_odds.get("price", 0)))
-
-                        try:
-                            # Sayıya çevirmeyi garantiye alalım
-                            res_odds = float(res_odds)
-                        except (TypeError, ValueError):
-                            res_odds = 0.0
-
-                        # Risk score için de güvenli çekme yapalım
-                        res_risk = res.get("risk_score", 99)
-                        if isinstance(res_risk, dict):
-                            res_risk = res_risk.get("value", res_risk.get("score", 99))
-                        try:
-                            res_risk = int(float(res_risk))
-                        except (TypeError, ValueError):
-                            res_risk = 99
-
-                        # Kıyaslamayı şimdi güvenle yapabiliriz
-                        if res_risk < 40 and res_odds >= 1.35:
+                        # ÜÇLÜ SÜZGEÇ: Analizden Karara Geçiş
+                        is_ok, reason = should_we_bet(res, match)
+                        
+                        if is_ok:
+                            logging.info(f"✅ BAHİS ONAYLANDI: {match['home_team']} vs {match['away_team']} | {reason}")
+                            
+                            # Güvenli Mod Çarpanı
+                            multiplier = await get_safe_mode_multiplier()
+                            
                             import bet_manager
-                            await asyncio.to_thread(bet_manager.place_virtual_bet, match, res)
+                            # Orijinal miktarı çarpanla güncelle
+                            current_bal = bet_manager.get_current_balance()
+                            odds = res.get('odds_value', 1.90)
+                            prob = res.get('win_probability', 50)
+                            kelly_stake = bet_manager.calculate_kelly_stake(odds, prob, current_bal)
+                            
+                            final_stake = round(kelly_stake * multiplier, 2)
+                            
+                            await asyncio.to_thread(bet_manager.place_virtual_bet, match, res, custom_amount=final_stake)
                             count += 1
                             await asyncio.sleep(5)
+                        else:
+                            logging.info(f"❌ BAHİS REDDEDİLDİ: {match['home_team']} vs {match['away_team']} | {reason}")
                 except Exception as match_error:
                     logging.error(f"Error processing match {match.get('id')}: {match_error}")
                     continue
@@ -302,6 +348,45 @@ async def background_props_analyzer():
                 NBA_PROPS_CACHE["data"] = all_recs
                 NBA_PROPS_CACHE["last_updated"] = time.time()
                 logging.info(f"Otonom NBA Props Cache Güncellendi: {len(all_recs)} patlama bulundu.")
+                
+                # OTOMATİK PROP BAHİSİ (Üçlü Süzgeç benzeri kontrol)
+                prop_count = 0
+                for prop in all_recs[:15]: # En iyi 15 prop'u incele
+                    if prop["confidence"] >= 75: # Props için eşik 75%
+                        match_id = f"PROP_{prop['event_id']}_{prop['player']}_{prop['stat']}"
+                        exists = await asyncio.to_thread(check_bet_exists, match_id)
+                        
+                        if not exists:
+                            # Prop için analiz nesnesi oluştur
+                            analysis = {
+                                "bet_target": prop["bet_target"],
+                                "odds_value": prop["over_odds"],
+                                "win_probability": prop["confidence"],
+                                "risk_score": 100 - prop["confidence"], # Props için risk ters orantılı
+                                "analysis": prop["reason"]
+                            }
+                            
+                            # Güvenli Mod
+                            multiplier = await get_safe_mode_multiplier()
+                            
+                            import bet_manager
+                            current_bal = bet_manager.get_current_balance()
+                            kelly_stake = bet_manager.calculate_kelly_stake(prop["over_odds"], prop["confidence"], current_bal)
+                            final_stake = round(kelly_stake * multiplier, 2)
+                            
+                            # Maç nesnesini taklit et
+                            mock_match = {
+                                "id": match_id,
+                                "sport_key": "basketball_nba",
+                                "home_team": prop["home_team"],
+                                "away_team": prop["away_team"],
+                                "commence_time": datetime.now().isoformat()
+                            }
+                            
+                            await asyncio.to_thread(bet_manager.place_virtual_bet, mock_match, analysis, custom_amount=final_stake)
+                            prop_count += 1
+                            if prop_count >= 5: break # Bir kerede max 5 prop bahsi
+
         except Exception as e:
             logging.error(f"Background props analyzer error: {e}")
         
