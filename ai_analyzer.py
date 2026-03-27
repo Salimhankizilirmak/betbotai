@@ -67,6 +67,17 @@ def save_cache(cache_data):
 
 AI_CACHE = load_cache()
 
+def safe_int_extract(val, default=0):
+    """Sözlük veya string olarak gelen sayısal değerleri güvenli bir şekilde int'e çevirir."""
+    if val is None: return default
+    if isinstance(val, dict):
+        # {"value": 85} veya {"decimal": 85} gibi yapıları kontrol et
+        val = val.get("value", val.get("decimal", val.get("score", val.get("int", default))))
+    try:
+        return int(float(val))
+    except (TypeError, ValueError):
+        return default
+
 def extract_real_odds(event, bet_target):
     if not event.get("bookmakers"):
         return 0.0
@@ -176,7 +187,7 @@ async def rule_based_analysis(match_data, home_stats, away_stats):
         matches = re.findall(r'%(\d+)', str(home_stats))
         if matches: home_score = int(matches[0])
     
-    win_prob = home_score
+    win_prob = safe_int_extract(home_score, 50)
     bet_target = "HOME_WIN" if win_prob > 55 else ("AWAY_WIN" if win_prob < 45 else "DRAW")
     
     return {
@@ -273,6 +284,10 @@ async def calculate_risk(match_data):
         match_json = re.search(r'\{.*\}', final_result_text, re.DOTALL)
         if match_json:
             analysis = json.loads(match_json.group())
+            # Sayısal değerleri sağlama al
+            analysis["risk_score"] = safe_int_extract(analysis.get("risk_score"), 99)
+            analysis["win_probability"] = safe_int_extract(analysis.get("win_probability"), 0)
+            
             analysis["analysis"] = f"AI Sentez: {gemini_analysis[:100]}... | Sonuç: {analysis.get('analysis', '')}"
             real_odds = extract_real_odds(match_data, analysis.get("bet_target", ""))
             if real_odds > 1.0: analysis["odds_value"] = real_odds
@@ -288,6 +303,10 @@ async def calculate_risk(match_data):
             match_json = re.search(r'\{.*\}', fallback_text, re.DOTALL)
             if match_json:
                 analysis = json.loads(match_json.group())
+                # Sayısal değerleri sağlama al
+                analysis["risk_score"] = safe_int_extract(analysis.get("risk_score"), 99)
+                analysis["win_probability"] = safe_int_extract(analysis.get("win_probability"), 0)
+                
                 real_odds = extract_real_odds(match_data, analysis.get("bet_target", ""))
                 if real_odds > 1.0: analysis["odds_value"] = real_odds
                 return analysis
