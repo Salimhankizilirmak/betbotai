@@ -233,7 +233,15 @@ async def background_analyzer():
                         logging.info(f"Otonom Analiz: {match['home_team']} vs {match['away_team']}")
                         res = await analyze_event(match)
                     
-                    if res and res.get("risk_score", 100) < 40 and res.get("odds_value", 0) >= 1.35:
+                    odds = res.get("odds_value", 0)
+                    if isinstance(odds, dict):
+                        odds = odds.get("value", odds.get("decimal", odds.get("price", 0)))
+                    try:
+                        odds = float(odds)
+                    except (TypeError, ValueError):
+                        odds = 0.0
+
+                    if res and res.get("risk_score", 100) < 40 and odds >= 1.35:
                         import bet_manager
                         await asyncio.to_thread(bet_manager.place_virtual_bet, match, res)
                         count += 1
