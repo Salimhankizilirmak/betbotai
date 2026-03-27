@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 import urllib.request
 import urllib.parse
+from difflib import SequenceMatcher
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -35,7 +36,8 @@ def init_db():
     try:
         if not os.path.exists("data"):
             os.makedirs("data")
-        with sqlite3.connect(DATABASE_FILE) as conn:
+        # Multi-thread desteği için check_same_thread=False
+        with sqlite3.connect(DATABASE_FILE, check_same_thread=False) as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS bets (
@@ -69,11 +71,50 @@ def init_db():
 # Uygulama açılışında DB kontrolü/kurulumu
 init_db()
 
+def get_db_connection():
+    """Güvenli DB bağlantısı döner."""
+    conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def get_performance_metrics():
+    """
+    AI'nın öğrenmesi için son 20 bahsin istatistiklerini hesaplar.
+    Hangi liglerde başarılı olduğumuzu ve oran aralıklarını döner.
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            # Son 20 sonuçlanmış bahis
+            cursor.execute("SELECT sport_key, status, odds_value FROM bets WHERE status != 'PENDING' ORDER BY created_at DESC LIMIT 20")
+            rows = cursor.fetchall()
+            
+            if not rows:
+                return "Henüz yeterli veri yok."
+            
+            wins = sum(1 for r in rows if r['status'] == 'WON')
+            total = len(rows)
+            win_rate = (wins / total) * 100
+            
+            # Lig bazlı başarı
+            leagues = {}
+            for r in rows:
+                l = r['sport_key']
+                if l not in leagues: leagues[l] = {"wins": 0, "total": 0}
+                leagues[l]["total"] += 1
+                if r['status'] == 'WON': leagues[l]["wins"] += 1
+            
+            league_stats = ", ".join([f"{l}: %{(s['wins']/s['total']*100):.0f}" for l, s in leagues.items()])
+            
+            return f"Son {total} Maç Başarı Oranı: %{win_rate:.0f}. Lig Bazlı: {league_stats}."
+    except Exception as e:
+        logging.error(f"Metrics error: {e}")
+        return "Performans verisi şu an alınamıyor."
+
 def get_current_balance(start_balance=10000.0):
     """Veritabanındaki kâr/zarar durumuna göre güncel bakiyeyi hesaplar."""
     try:
-        with sqlite3.connect(DATABASE_FILE) as conn:
-            conn.row_factory = sqlite3.Row
+        with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT status, profit, bet_amount FROM bets")
             rows = cursor.fetchall()
@@ -176,8 +217,7 @@ def get_bet_history():
     Grafik ve tablo için geçmiş bahisleri döner.
     """
     try:
-        with sqlite3.connect(DATABASE_FILE) as conn:
-            conn.row_factory = sqlite3.Row
+        with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM bets ORDER BY created_at DESC")
             return [dict(row) for row in cursor.fetchall()]
@@ -209,12 +249,19 @@ def check_bet_exists(match_id):
     Belirli bir maç için bahis yapılıp yapılmadığını kontrol eder.
     """
     try:
-        with sqlite3.connect(DATABASE_FILE) as conn:
+        with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT 1 FROM bets WHERE match_id = ?", (match_id,))
             return cursor.fetchone() is not None
     except:
         return False
+
+def fuzzy_match(name1, name2, threshold=0.7):
+    """İki takım isminin benzerliğini kontrol eder (Lakers vs LA Lakers)."""
+    if not name1 or not name2: return False
+    n1, n2 = name1.lower(), name2.lower()
+    if n1 in n2 or n2 in n1: return True
+    return SequenceMatcher(None, n1, n2).ratio() >= threshold
 
 def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
     """
@@ -232,10 +279,18 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
             prediction, odds, amount, home, away = bet
             is_winner = False
             
+            # Fuzzy match winner name
+            # winner API'den gelen dize (örn: "Lakers" veya "HOME_WIN")
+            
             # 1. Taraf Bahsi Kontrolü (HOME_WIN, AWAY_WIN, DRAW)
             if prediction in ["HOME_WIN", "AWAY_WIN", "DRAW"]:
                 if prediction == winner:
                     is_winner = True
+                elif winner not in ["HOME_WIN", "AWAY_WIN", "DRAW"]:
+                    # Eğer winner dize olarak gelmişse (takım ismi) fuzzy match yap
+                    target_team = home if prediction == "HOME_WIN" else away
+                    if fuzzy_match(target_team, winner):
+                        is_winner = True
             
             # 2. Alt/Üst Bahsi Kontrolü (OVER 2.5, UNDER 210.5 vb.)
             elif h_score is not None and a_score is not None:
@@ -282,7 +337,7 @@ def get_pending_sports():
     Sonuç bekleyen spor dallarını benzersiz liste olarak döner.
     """
     try:
-        with sqlite3.connect(DATABASE_FILE) as conn:
+        with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT DISTINCT sport_key FROM bets WHERE status = 'PENDING'")
             return [row[0] for row in cursor.fetchall()]

@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 # İç bağımlılıklar
 from data_loader import get_team_stats
 from nba_data import get_nba_team_stats
-from bet_manager import place_virtual_bet, get_recent_performance
+from bet_manager import place_virtual_bet, get_recent_performance, get_performance_metrics
 
 load_dotenv()
 
@@ -71,8 +71,14 @@ def safe_int_extract(val, default=0):
     """Sözlük veya string olarak gelen sayısal değerleri güvenli bir şekilde int'e çevirir."""
     if val is None: return default
     if isinstance(val, dict):
-        # {"value": 85} veya {"decimal": 85} gibi yapıları kontrol et
-        val = val.get("value", val.get("decimal", val.get("score", val.get("int", default))))
+        # {"value": 85}, {"result": 85}, {"decimal": 85} gibi her türlü yapıyı tara
+        val = val.get("value", val.get("result", val.get("decimal", val.get("score", val.get("int", val.get("win_probability", default))))))
+    
+    if isinstance(val, str):
+        # String içindeki ilk sayıyı bulmaya çalış (Örn: "%85" -> 85)
+        match = re.search(r'(\d+)', val)
+        if match: val = match.group(1)
+        
     try:
         return int(float(val))
     except (TypeError, ValueError):
@@ -242,11 +248,20 @@ async def calculate_risk(match_data):
         away_stats = await asyncio.to_thread(get_nba_team_stats, away_name, home_name)
 
     past_performance = get_recent_performance(limit=10)
+    ai_metrics = get_performance_metrics()
 
     # GLOBAL FALLBACK WRAPPER
     try:
         # 1. ADIM: Gemini İlk Analizi
-        gemini_initial_prompt = f"Uzman analist olarak şu maçı analiz et: {json.dumps(match_data, indent=2)}\nİstatistikler:\nEv: {home_stats}\nDeplasman: {away_stats}\nPerformans: {past_performance}\nSadece analiz metni dön."
+        gemini_initial_prompt = (
+            f"Sen 'BetBot Baron' adında uzman bir bahis analistisin. SADECE TÜRKÇE KONUŞ.\n"
+            f"Şu maçı analiz et: {json.dumps(match_data, indent=2)}\n"
+            f"İstatistikler: Ev: {home_stats} | Deplasman: {away_stats}\n"
+            f"Önceki Maçlar: {past_performance}\n"
+            f"Genel Başarı Durumun: {ai_metrics}\n\n"
+            f"TALİMAT: 'Güçlü kadro' gibi genel ifadelerden kaçın. Sayısal verilere (PTS, REB, AST, Form yüzdesi) dayalı kanıtlar sun.\n"
+            f"Kendi başarı durumuna bakarak (Örn: Euroleague'de kaybediyorsan) daha temkinli veya agresif yorum yap. Sadece analiz metni dön."
+        )
         
         gemini_analysis = ""
         for model_name in AI_MODELS:
@@ -269,7 +284,12 @@ async def calculate_risk(match_data):
         await asyncio.sleep(5)
 
         # 3. ADIM: Gemini Final Kararı
-        final_prompt = f"Sen 'BetBot Baron' AI'sısın. Son kararını ver. TÜRKÇE YAP.\nİlk Analiz: {gemini_analysis}\nEleştiri: {openai_critique}\nSADECE RAW JSON DÖN:\n{{\"risk_score\": int (0-100), \"win_probability\": int (0-100), \"bet_target\": \"string\", \"odds_value\": float, \"recommendation\": \"string\", \"analysis\": \"string\"}}"
+        final_prompt = (
+            f"Analizleri sentezle ve final kararını RAW JSON olarak ver. SADECE TÜRKÇE ANALİZ YAZ.\n"
+            f"İlk Analiz: {gemini_analysis}\nEleştiri: {openai_critique}\n\n"
+            f"SADECE ŞU JSON FORMATINI DÖN:\n"
+            f"{{\"risk_score\": 0-100, \"win_probability\": 0-100, \"bet_target\": \"string\", \"odds_value\": float, \"recommendation\": \"string\", \"analysis\": \"Türkçe ve istatistik odaklı detaylı açıklama\"}}"
+        )
         
         final_result_text = ""
         for model_name in AI_MODELS:
@@ -296,7 +316,14 @@ async def calculate_risk(match_data):
     except Exception as e:
         logging.warning(f"AI Analiz Süreci Gemini ile Başarısız: {e}. Fallback (Groq/OpenRouter) deneniyor...")
         # Groq/OpenRouter üzerinden TÜM ANALİZİ TEK SEFERDE YAP
-        fallback_prompt = f"MAÇ: {home_name} vs {away_name}\nSTAT: {home_stats} vs {away_stats}\nJSON formatında şu alanları içeren son analizini yap: risk_score, win_probability, bet_target, odds_value, recommendation, analysis"
+        ai_metrics = get_performance_metrics()
+        fallback_prompt = (
+            f"Sen 'BetBot Baron' analistisin. SADECE TÜRKÇE KONUŞ.\n"
+            f"MAÇ: {home_name} vs {away_name}\nSTAT: {home_stats} vs {away_stats}\n"
+            f"Başarı Durumun: {ai_metrics}\n"
+            f"İstatistik odaklı bir analiz yap ve SADECE RAW JSON dön:\n"
+            f"{{\"risk_score\": int, \"win_probability\": int, \"bet_target\": \"string\", \"odds_value\": float, \"recommendation\": \"string\", \"analysis\": \"Türkçe detaylı analiz\"}}"
+        )
         fallback_text = await analyze_with_fallback(fallback_prompt)
         
         try:
