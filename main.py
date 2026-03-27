@@ -225,48 +225,54 @@ async def background_analyzer():
             
             count = 0
             for match in combined:
-                match_id = match["id"]
-                exists = await asyncio.to_thread(check_bet_exists, match_id)
-                
-                if not exists:
-                    res = None
-                    if match_id in AI_CACHE:
-                        # Eğer zaten analiz edildiyse cache'den al
-                        res = AI_CACHE[match_id]
-                        logging.info(f"Cached Analiz Kullanıldı: {match['home_team']} vs {match['away_team']}")
-                    else:
-                        # Henüz analiz edilmediyse AI'ya sor
-                        logging.info(f"Otonom Analiz: {match['home_team']} vs {match['away_team']}")
-                        res = await analyze_event(match)
-                
-                # Güvenli odds çekme işlemi
-                res_odds = res.get("odds_value", 0)
-
-                # Eğer odds bir sözlükse içindeki değeri alalım
-                if isinstance(res_odds, dict):
-                    res_odds = res_odds.get("value", res_odds.get("decimal", res_odds.get("price", 0)))
-
-                # Sayıya çevirmeyi garantiye alalım
                 try:
-                    res_odds = float(res_odds)
-                except (TypeError, ValueError):
-                    res_odds = 0.0
+                    match_id = match["id"]
+                    exists = await asyncio.to_thread(check_bet_exists, match_id)
+                    
+                    if not exists:
+                        res = None
+                        if match_id in AI_CACHE:
+                            # Eğer zaten analiz edildiyse cache'den al
+                            res = AI_CACHE[match_id]
+                            logging.info(f"Cached Analiz Kullanıldı: {match['home_team']} vs {match['away_team']}")
+                        else:
+                            # Henüz analiz edilmediyse AI'ya sor
+                            logging.info(f"Otonom Analiz: {match['home_team']} vs {match['away_team']}")
+                            res = await analyze_event(match)
+                    
+                        if not res: continue
 
-                # Risk score için de güvenli çekme yapalım
-                res_risk = res.get("risk_score", 99)
-                if isinstance(res_risk, dict):
-                    res_risk = res_risk.get("value", res_risk.get("score", 99))
-                try:
-                    res_risk = int(float(res_risk))
-                except (TypeError, ValueError):
-                    res_risk = 99
+                        # Güvenli odds çekme işlemi
+                        res_odds = res.get("odds_value", 0)
 
-                # Kıyaslamayı şimdi güvenle yapabiliriz
-                if res and res_risk < 40 and res_odds >= 1.35:
-                    import bet_manager
-                    await asyncio.to_thread(bet_manager.place_virtual_bet, match, res)
-                    count += 1
-                    await asyncio.sleep(5)
+                        # Eğer odds bir sözlükse içindeki değeri alalım
+                        if isinstance(res_odds, dict):
+                            res_odds = res_odds.get("value", res_odds.get("decimal", res_odds.get("price", 0)))
+
+                        try:
+                            # Sayıya çevirmeyi garantiye alalım
+                            res_odds = float(res_odds)
+                        except (TypeError, ValueError):
+                            res_odds = 0.0
+
+                        # Risk score için de güvenli çekme yapalım
+                        res_risk = res.get("risk_score", 99)
+                        if isinstance(res_risk, dict):
+                            res_risk = res_risk.get("value", res_risk.get("score", 99))
+                        try:
+                            res_risk = int(float(res_risk))
+                        except (TypeError, ValueError):
+                            res_risk = 99
+
+                        # Kıyaslamayı şimdi güvenle yapabiliriz
+                        if res_risk < 40 and res_odds >= 1.35:
+                            import bet_manager
+                            await asyncio.to_thread(bet_manager.place_virtual_bet, match, res)
+                            count += 1
+                            await asyncio.sleep(5)
+                except Exception as match_error:
+                    logging.error(f"Error processing match {match.get('id')}: {match_error}")
+                    continue
                 
                 if count >= 10: break # Bir döngüde en fazla 10 bahis alsın
         except Exception as e:
