@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from oddsapi_client import get_odds, get_scores
 from ai_analyzer import analyze_event, AI_CACHE, NBA_PROPS_CACHE
 from bet_manager import (
+    init_db,
     place_virtual_bet, 
     get_pending_sports, 
     resolve_bet_status, 
