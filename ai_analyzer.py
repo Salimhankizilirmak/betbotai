@@ -278,11 +278,15 @@ async def calculate_risk(match_data):
             except Exception as e:
                 logging.error(f"NBA Prop fetch error: {e}")
         elif "euroleague" in sport_key:
-            # Euroleague İstatistik Entegrasyonu
+            # Euroleague İstatistik Entegrasyonu (Full Roster & Matchups)
             try:
                 home_stats = await get_euroleague_team_stats(home_name)
                 away_stats = await get_euroleague_team_stats(away_name)
-                player_prop_trends = await get_euroleague_player_trends(home_name)
+                
+                # Her iki takımın tam kadrosunu çek
+                home_roster = await get_euroleague_roster(home_name)
+                away_roster = await get_euroleague_roster(away_name)
+                player_prop_trends = f"\nEŞLEŞMELER (MATCHUPS):\n{home_roster}\n{away_roster}"
             except Exception as e:
                 logging.error(f"Euroleague stats error: {e}")
 
@@ -302,9 +306,10 @@ async def calculate_risk(match_data):
             f"KESİN TALİMATLAR:\n"
             f"1. 'İyi kadro', 'Güçlü taraf' gibi genel ve boş övgüler YASAKTIR. Sadece rakamlarla konuş.\n"
             f"2. Analizinde en az 2 adet spesifik istatistik (PTS, REB, AST, Form yüzdesi vb.) kullan.\n"
-            f"3. BASKETBOL maçlarında 'DRAW' (Beraberlik) bahsini ASLA önerme. Sadece kazanacak tarafı (Ev/Dep) veya Alt/Üst seç.\n"
-            f"4. Eğer taraf bahsi oranları çok dengesizse (h2h < 1.30), mutlaka 'Over/Under' seçeneklerini değerlendir.\n"
-            f"5. Başarı durumuna bakarak (Örn: En başarısız olduğun ligdeysen) ekstra disiplinli ol.\n"
+            f"3. BASKETBOL maçlarında 'DRAW' (Beraberlik) bahsini ASLA önerme.\n"
+            f"4. EŞLEŞMELERİ (MATCHUPS) analiz et: Takımların kilit oyuncularını birbiriyle kıyasla. Örneğin; 'Home Team'in pivotu X, Away Team'in X oyuncusuna karşı ribaund üstünlüğü kurabilir' gibi derinlemesine yorumlar yap.\n"
+            f"5. Eğer taraf bahsi oranları çok dengesizse (h2h < 1.30), mutlaka 'Over/Under' seçeneklerini değerlendir.\n"
+            f"6. Başarı durumuna bakarak ekstra disiplinli ol.\n"
             f"Sadece derinlemesine analiz metni dön (JSON değil)."
         )
         
