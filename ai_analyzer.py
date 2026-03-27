@@ -1,18 +1,23 @@
 import os
-import json
-import asyncio
-import logging
-import time
 import re
+import json
+import time
+import asyncio
 import httpx
+import logging
 from google import genai
 from openai import OpenAI
 from dotenv import load_dotenv
+
+# Global AI Cache & NBA Prop Cache
+AI_CACHE = {}
+NBA_PROPS_CACHE = {"data": [], "last_updated": 0}
 
 # İç bağımlılıklar
 from data_loader import get_team_stats
 from nba_data import get_nba_team_stats
 from bet_manager import place_virtual_bet, get_recent_performance, get_performance_metrics
+from nba_player_props import analyze_nba_player_props
 
 load_dotenv()
 
@@ -240,16 +245,26 @@ async def calculate_risk(match_data):
     home_name = match_data.get('home_team', '')
     away_name = match_data.get('away_team', '')
 
-    home_stats = ""
-    away_stats = ""
+    home_stats = None
+    away_stats = None
+    player_prop_trends = "Veri yok"
     
-    if "soccer" in sport_key.lower():
-        home_stats = await get_team_stats(home_name)
-        away_stats = await get_team_stats(away_name)
-    
-    if "basketball_nba" in sport_key:
+    if "soccer" in sport_key:
+        home_stats = await asyncio.to_thread(get_team_stats, home_name)
+        away_stats = await asyncio.to_thread(get_team_stats, away_name)
+    elif "basketball" in sport_key:
         home_stats = await asyncio.to_thread(get_nba_team_stats, home_name, away_name)
         away_stats = await asyncio.to_thread(get_nba_team_stats, away_name, home_name)
+        if "nba" in sport_key:
+            # NBA Player Props Entegrasyonu
+            try:
+                event_id = match_data.get("id")
+                props = await analyze_nba_player_props(event_id, home_name, away_name)
+                if props:
+                    # En iyi 5 prop trendini al
+                    player_prop_trends = "\n".join([f"- {p['player']} ({p['stat']}): Hat {p['line']} | Güven: %{p['confidence']} | Gerekçe: {p['reason']}" for p in props[:5]])
+            except Exception as e:
+                logging.error(f"NBA Prop fetch error: {e}")
 
     past_performance = get_recent_performance(limit=10)
     ai_metrics = get_performance_metrics()
@@ -258,14 +273,18 @@ async def calculate_risk(match_data):
     try:
         # 1. ADIM: Gemini İlk Analizi
         gemini_initial_prompt = (
-            f"Sen 'BetBot Baron' adında uzman bir bahis analistisin. SADECE TÜRKÇE KONUŞ.\n"
+            f"Sen 'Baron' adında, sadece verilere inanan uzman bir bahis stratejistisin. SADECE TÜRKÇE KONUŞ.\n"
             f"Şu maçı analiz et: {json.dumps(match_data, indent=2)}\n"
-            f"İstatistikler: Ev: {home_stats} | Deplasman: {away_stats}\n"
-            f"Önceki Maçlar: {past_performance}\n"
-            f"Başarı Durumun: {ai_metrics}\n\n"
-            f"TALİMAT: 'Güçlü kadro' gibi genel ifadelerden kaçın. Sayısal verilere (PTS, REB, AST, Form yüzdesi) dayalı kanıtlar sun.\n"
-            f"Eğer taraf bahsi (H2H) oranları çok dengesiz veya riskliyse, mutlaka 'Over/Under' (Alt/Üst) seçeneklerini değerlendir.\n"
-            f"Kendi başarı durumuna bakarak daha temkinli veya agresif yorum yap. Sadece analiz metni dön."
+            f"TAKIM İSTATİSTİKLERİ: Ev: {home_stats} | Deplasman: {away_stats}\n"
+            f"NBA OYUNCU TRENDLERİ: {player_prop_trends}\n"
+            f"ÖNCEKİ BAHİSLERİN: {past_performance}\n"
+            f"GENEL BAŞARI DURUMUN: {ai_metrics}\n\n"
+            f"KESİN TALİMATLAR:\n"
+            f"1. 'İyi kadro', 'Güçlü taraf' gibi genel ve boş övgüler YASAKTIR. Sadece rakamlarla konuş.\n"
+            f"2. Analizinde en az 2 adet spesifik istatistik (PTS, REB, AST, Form yüzdesi vb.) kullan.\n"
+            f"3. Eğer taraf bahsi oranları çok dengesizse (h2h < 1.30), mutlaka 'Over/Under' seçeneklerini değerlendir.\n"
+            f"4. Başarı durumuna bakarak (Örn: En başarısız olduğun ligdeysen) ekstra disiplinli ol.\n"
+            f"Sadece derinlemesine analiz metni dön (JSON değil)."
         )
         
         gemini_analysis = ""
@@ -292,8 +311,9 @@ async def calculate_risk(match_data):
         final_prompt = (
             f"Analizleri sentezle ve final kararını RAW JSON olarak ver. SADECE TÜRKÇE ANALİZ YAZ.\n"
             f"İlk Analiz: {gemini_analysis}\nEleştiri: {openai_critique}\n\n"
+            f"Analiz kısmında mutlaka sayısal verilere (Örn: 'Son 5 maçta 110 sayı ortalaması') yer ver.\n"
             f"SADECE ŞU JSON FORMATINI DÖN:\n"
-            f"{{\"risk_score\": 0-100, \"win_probability\": 0-100, \"bet_target\": \"string\", \"odds_value\": float, \"recommendation\": \"string\", \"analysis\": \"Türkçe ve istatistik odaklı detaylı açıklama\"}}"
+            f"{{\"risk_score\": 0-100, \"win_probability\": 0-100, \"bet_target\": \"string\", \"odds_value\": float, \"recommendation\": \"string\", \"analysis\": \"Türkçe ve İstatistik Odaklı Analiz (Min 2 Rakam)\"}}"
         )
         
         final_result_text = ""
@@ -323,11 +343,12 @@ async def calculate_risk(match_data):
         # Groq/OpenRouter üzerinden TÜM ANALİZİ TEK SEFERDE YAP
         ai_metrics = get_performance_metrics()
         fallback_prompt = (
-            f"Sen 'BetBot Baron' analistisin. SADECE TÜRKÇE KONUŞ.\n"
+            f"Sen 'Baron' stratejistisin. SADECE TÜRKÇE KONUŞ.\n"
             f"MAÇ: {home_name} vs {away_name}\nSTAT: {home_stats} vs {away_stats}\n"
+            f"OYUNCU TRENDLERİ: {player_prop_trends}\n"
             f"Başarı Durumun: {ai_metrics}\n"
-            f"İstatistik odaklı bir analiz yap ve SADECE RAW JSON dön:\n"
-            f"{{\"risk_score\": int, \"win_probability\": int, \"bet_target\": \"string\", \"odds_value\": float, \"recommendation\": \"string\", \"analysis\": \"Türkçe detaylı analiz\"}}"
+            f"İstatistik odaklı bir analiz yap (Analizde rakam kullanmak zorunludur) ve SADECE RAW JSON dön:\n"
+            f"{{\"risk_score\": int, \"win_probability\": int, \"bet_target\": \"string\", \"odds_value\": float, \"recommendation\": \"string\", \"analysis\": \"Türkçe istatistik bazlı analiz\"}}"
         )
         fallback_text = await analyze_with_fallback(fallback_prompt)
         
