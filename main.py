@@ -246,14 +246,23 @@ async def background_analyzer():
                 if isinstance(res_odds, dict):
                     res_odds = res_odds.get("value", res_odds.get("decimal", res_odds.get("price", 0)))
 
+                # Sayıya çevirmeyi garantiye alalım
                 try:
-                    # Sayıya çevirmeyi garantiye alalım
                     res_odds = float(res_odds)
                 except (TypeError, ValueError):
                     res_odds = 0.0
 
+                # Risk score için de güvenli çekme yapalım
+                res_risk = res.get("risk_score", 99)
+                if isinstance(res_risk, dict):
+                    res_risk = res_risk.get("value", res_risk.get("score", 99))
+                try:
+                    res_risk = int(float(res_risk))
+                except (TypeError, ValueError):
+                    res_risk = 99
+
                 # Kıyaslamayı şimdi güvenle yapabiliriz
-                if res and res.get("risk_score", 100) < 40 and res_odds >= 1.35:
+                if res and res_risk < 40 and res_odds >= 1.35:
                     import bet_manager
                     await asyncio.to_thread(bet_manager.place_virtual_bet, match, res)
                     count += 1
