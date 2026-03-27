@@ -44,7 +44,7 @@ async def get_odds(sport_key="upcoming", region="eu", markets="h2h,totals,spread
         CACHE[cache_key] = {"data": data, "timestamp": time.time()}
         return data
 
-async def get_scores(sport_key="upcoming", days_from=1):
+async def get_scores(sport_key="upcoming", days_from=3):
     cache_key = f"scores_{sport_key}_{days_from}"
     if cache_key in CACHE and time.time() - CACHE[cache_key]["timestamp"] < CACHE_TTL:
         print("Returning cached scores")

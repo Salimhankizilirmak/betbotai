@@ -296,13 +296,47 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
             
             # winner API'den gelen dize (örn: "Lakers" veya "HOME_WIN")
             
-            # 0. Player Props Kontrolü (Henüz otomatik sonuçlanmıyor - Manuel veya BoxScore API gerektirir)
+            # 0. Player Props Kontrolü
             if str(match_id).startswith("PROP_"):
-                logging.info(f"Individual Player Prop ({match_id}) requires manual or BoxScore resolution. Skipping total score logic.")
-                return False
-
+                # Örn: PROP_12345_LeBron James_PTS
+                parts = str(match_id).split("_")
+                if len(parts) >= 4:
+                    prop_player = parts[2]
+                    prop_stat = parts[3]
+                    
+                    # NBA API üzerinden gerçek veriyi çekmeye çalış (NBA ise)
+                    import nba_data
+                    # commence_time'ı DB'den bahis yapılan maçtan alabiliriz ama resolve_bet_status'a geçilmiyor.
+                    # Bekleyen bahis bilgilerini zaten yukarda aldık (prediction, odds, amount, home, away)
+                    # Ama tarih eksik. Tarihi DB'den çekelim.
+                    with get_db_connection() as conn_local:
+                        row = conn_local.execute("SELECT commence_time FROM bets WHERE match_id = ?", (match_id,)).fetchone()
+                        commence_time = row['commence_time'] if row else None
+                    
+                    if commence_time:
+                        actual_val = nba_data.get_nba_player_game_stat(prop_player, commence_time, prop_stat)
+                        if actual_val is not None:
+                            # Tahmini kontrol et (Örn: "LeBron James | PTS OVER 25.5")
+                            # bet_target (prediction) içinden limiti çek
+                            import re
+                            limit_match = re.search(r'OVER\s+([\d.]+)', prediction)
+                            if limit_match:
+                                target_line = float(limit_match.group(1))
+                                is_winner = actual_val > target_line
+                                h_score, a_score = actual_val, target_line # Dashboard'da görünsün diye
+                                logging.info(f"PROP RESOLVED: {prop_player} {prop_stat} Actual={actual_val} vs Line={target_line} | Win={is_winner}")
+                            else:
+                                return False
+                        else:
+                            logging.info(f"Prop {match_id} için henüz boxscore verisi yok. Atlanıyor.")
+                            return False
+                    else:
+                        return False
+                else:
+                    return False
+            
             # 1. Taraf Bahsi Kontrolü (HOME_WIN, AWAY_WIN, DRAW)
-            if prediction in ["HOME_WIN", "AWAY_WIN", "DRAW"]:
+            elif prediction in ["HOME_WIN", "AWAY_WIN", "DRAW"]:
                 if prediction == winner:
                     is_winner = True
                 elif winner not in ["HOME_WIN", "AWAY_WIN", "DRAW"]:

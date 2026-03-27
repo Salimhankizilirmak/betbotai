@@ -211,7 +211,21 @@ async def check_and_resolve_all_pending_bets():
                             if h_score > a_score: winner = "HOME_WIN"
                             elif a_score > h_score: winner = "AWAY_WIN"
                             
+                            # 1. Ana Maç Bahsini Çöz
                             await asyncio.to_thread(resolve_bet_status, event['id'], winner, h_score, a_score)
+                            
+                            # 2. Varsa Bu Maçın Player Prop'larını Kontrol Et (match_id PROP_ ile başlıyorsa)
+                            # Not: Prop çözümü için boxscore gerekecektir, burada sadece match_id'leri bulup temizliyoruz veya logluyoruz.
+                            import bet_manager
+                            pending_props = [b for b in await asyncio.to_thread(bet_manager.get_bet_history) 
+                                            if b['status'] == 'PENDING' and b['match_id'].startswith(f"PROP_{event['id']}")]
+                            
+                            for prop in pending_props:
+                                # TODO: Gerçek Oyuncu İstatistiği Çözümleyici Gerekli
+                                logging.info(f"Maç Bitti, Prop Beklemede: {prop['match_id']} | Match Result: {winner}")
+                                # Eğer match win/loss ise prop'u da dolaylı çözebiliriz veya manuel bırakırız.
+                                # Ama en azından match_id eşleşmesini logladık.
+                                await asyncio.to_thread(resolve_bet_status, prop['match_id'], winner, h_score, a_score)
     except Exception as e:
         logging.error(f"Error in check_and_resolve_all_pending_bets: {e}")
 
