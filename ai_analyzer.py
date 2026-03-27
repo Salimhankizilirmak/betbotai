@@ -282,8 +282,9 @@ async def calculate_risk(match_data):
             f"KESİN TALİMATLAR:\n"
             f"1. 'İyi kadro', 'Güçlü taraf' gibi genel ve boş övgüler YASAKTIR. Sadece rakamlarla konuş.\n"
             f"2. Analizinde en az 2 adet spesifik istatistik (PTS, REB, AST, Form yüzdesi vb.) kullan.\n"
-            f"3. Eğer taraf bahsi oranları çok dengesizse (h2h < 1.30), mutlaka 'Over/Under' seçeneklerini değerlendir.\n"
-            f"4. Başarı durumuna bakarak (Örn: En başarısız olduğun ligdeysen) ekstra disiplinli ol.\n"
+            f"3. BASKETBOL maçlarında 'DRAW' (Beraberlik) bahsini ASLA önerme. Sadece kazanacak tarafı (Ev/Dep) veya Alt/Üst seç.\n"
+            f"4. Eğer taraf bahsi oranları çok dengesizse (h2h < 1.30), mutlaka 'Over/Under' seçeneklerini değerlendir.\n"
+            f"5. Başarı durumuna bakarak (Örn: En başarısız olduğun ligdeysen) ekstra disiplinli ol.\n"
             f"Sadece derinlemesine analiz metni dön (JSON değil)."
         )
         

@@ -256,11 +256,16 @@ def verify_and_place_bet(analysis, event):
     if len(numbers) < 2:
         return False, f"Zayıf Analiz (Yetersiz Sayısal Veri: {len(numbers)} rakam)"
 
-    # 2. Filtre: Olasılık (AI Konsensüsü)
+    # 2. Filtre: Basketbol Beraberlik Yasağı
+    sport_key = event.get("sport_key", "").lower()
+    if "basketball" in sport_key and analysis.get("bet_target") == "DRAW":
+        return False, "Basketbolda beraberlik bahsi yasaktır."
+
+    # 3. Filtre: Olasılık (AI Konsensüsü)
     if prob < 65:
         return False, f"Düşük Olasılık (%{prob})"
         
-    # 3. Filtre: Risk Skoru
+    # 4. Filtre: Risk Skoru
     if risk >= 35:
         return False, f"Yüksek Risk (Score: {risk})"
         
@@ -283,7 +288,7 @@ async def background_resolver():
             await check_and_resolve_all_pending_bets()
         except Exception as e:
             logging.error(f"Resolver task error: {e}")
-        await asyncio.sleep(900) # 15 dakika (1800'den düşürüldü)
+        await asyncio.sleep(3600) # Saat başı (Kullanıcı Talebi)
 
 async def background_analyzer():
     logging.info("Background analyzer started.")
@@ -334,13 +339,16 @@ async def background_analyzer():
                             multiplier = await get_safe_mode_multiplier()
                             
                             import bet_manager
-                            # Orijinal miktarı çarpanla güncelle
                             current_bal = bet_manager.get_current_balance()
                             odds = res.get('odds_value', 1.90)
                             prob = res.get('win_probability', 50)
                             kelly_stake = bet_manager.calculate_kelly_stake(odds, prob, current_bal)
                             
                             final_stake = round(kelly_stake * multiplier, 2)
+                            
+                            # GÜVENLİ MOD: Eğer çarpan 0.5 ise (win rate < 50), miktar en fazla 25.0 olsun (Kullanıcı Talebi)
+                            if multiplier < 1.0:
+                                final_stake = 25.0
                             
                             await asyncio.to_thread(bet_manager.place_virtual_bet, match, res, custom_amount=final_stake)
                             count += 1
