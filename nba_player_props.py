@@ -231,7 +231,7 @@ async def analyze_nba_player_props(event_id: str, home_team: str, away_team: str
                     "event_id": event_id,
                     "home_team": home_team,
                     "away_team": away_team,
-                    "bet_target": f"OVER_{stat}_{line}",
+                    "bet_target": f"{player} | {stat} OVER {line}",
                     "bet_amount": bet_amount
                 })
         except Exception as e:
