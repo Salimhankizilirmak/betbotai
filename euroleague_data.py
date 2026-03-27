@@ -166,3 +166,43 @@ async def get_euroleague_player_trends(team_name: str):
     except Exception as e:
         logging.error(f"Error parsing Euroleague player trends: {e}")
         return ""
+
+async def get_euroleague_roster(team_name: str):
+    """Returns full roster stats for a team for matchup analysis."""
+    await refresh_euroleague_cache()
+    
+    if not _euro_cache["players"] or "players" not in _euro_cache["players"]:
+        return "Roster currently unavailable."
+
+    try:
+        team_players = []
+        for p_item in _euro_cache["players"].get("players", []):
+            api_team = p_item.get("player", {}).get("team", {}).get("name", "")
+            if fuzzy_match(team_name, api_team):
+                team_players.append(p_item)
+        
+        if not team_players:
+            return "No roster found for this team."
+
+        # Sort by minutesPlayed to get the rotation (up to 12 players)
+        team_players.sort(key=lambda x: -x.get("minutesPlayed", 0))
+        
+        roster_str = f"--- {team_name} KADROSU ---\n"
+        for p in team_players[:12]:
+            raw_name = p.get("player", {}).get("name", "Unknown")
+            if "," in raw_name:
+                parts = raw_name.split(",")
+                name = f"{parts[1].strip()} {parts[0].strip()}".title()
+            else:
+                name = raw_name.title()
+                
+            pts = p.get("pointsScored", 0)
+            reb = p.get("totalRebounds", 0)
+            ast = p.get("assists", 0)
+            mins = p.get("minutesPlayed", 0)
+            roster_str += f"- {name}: {pts:.1f} Sayı, {reb:.1f} Rib, {ast:.1f} Asist (Süre: {int(mins)} dk)\n"
+            
+        return roster_str
+    except Exception as e:
+        logging.error(f"Error parsing Euroleague full roster: {e}")
+        return f"{team_name} kadrosu çekilemedi."
