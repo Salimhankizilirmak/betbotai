@@ -252,12 +252,22 @@ async def calculate_risk(match_data):
     player_prop_trends = "Veri yok"
     
     if "soccer" in sport_key:
-        home_stats = await asyncio.to_thread(get_team_stats, home_name)
-        away_stats = await asyncio.to_thread(get_team_stats, away_name)
+        if "premier_league" in sport_key:
+            # Premier League İstatistik Entegrasyonu
+            try:
+                home_stats = await get_pl_team_stats(home_name)
+                away_stats = await get_pl_team_stats(away_name)
+                player_prop_trends = await get_pl_player_trends(home_name)
+            except Exception as e:
+                logging.error(f"Premier League stats error: {e}")
+        else:
+            # Diğer Soccer Ligleri (EPL/La Liga csv)
+            home_stats = await get_team_stats(home_name)
+            away_stats = await get_team_stats(away_name)
     elif "basketball" in sport_key:
-        home_stats = await asyncio.to_thread(get_nba_team_stats, home_name, away_name)
-        away_stats = await asyncio.to_thread(get_nba_team_stats, away_name, home_name)
         if "nba" in sport_key:
+            home_stats = await asyncio.to_thread(get_nba_team_stats, home_name, away_name)
+            away_stats = await asyncio.to_thread(get_nba_team_stats, away_name, home_name)
             # NBA Player Props Entegrasyonu
             try:
                 event_id = match_data.get("id")
@@ -275,14 +285,6 @@ async def calculate_risk(match_data):
                 player_prop_trends = await get_euroleague_player_trends(home_name)
             except Exception as e:
                 logging.error(f"Euroleague stats error: {e}")
-        elif "premier_league" in sport_key:
-            # Premier League İstatistik Entegrasyonu
-            try:
-                home_stats = await get_pl_team_stats(home_name)
-                away_stats = await get_pl_team_stats(away_name)
-                player_prop_trends = await get_pl_player_trends(home_name)
-            except Exception as e:
-                logging.error(f"Premier League stats error: {e}")
 
     past_performance = get_recent_performance(limit=10)
     ai_metrics = get_performance_metrics()
