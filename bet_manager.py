@@ -294,9 +294,13 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
             prediction, odds, amount, home, away = bet
             is_winner = False
             
-            # Fuzzy match winner name
             # winner API'den gelen dize (örn: "Lakers" veya "HOME_WIN")
             
+            # 0. Player Props Kontrolü (Henüz otomatik sonuçlanmıyor - Manuel veya BoxScore API gerektirir)
+            if str(match_id).startswith("PROP_"):
+                logging.info(f"Individual Player Prop ({match_id}) requires manual or BoxScore resolution. Skipping total score logic.")
+                return False
+
             # 1. Taraf Bahsi Kontrolü (HOME_WIN, AWAY_WIN, DRAW)
             if prediction in ["HOME_WIN", "AWAY_WIN", "DRAW"]:
                 if prediction == winner:
