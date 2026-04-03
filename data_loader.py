@@ -81,10 +81,18 @@ async def get_team_stats(team_name, league_key="EPL"):
     
     try:
         # Takım ismini fuzzy (kelime bazlı) ara
-        first_word = team_name.split()[0]
-        # football-data.co.uk formatı: 'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG', 'HC', 'AC', 'HY', 'AY'
-        home_matches = df[df['HomeTeam'].str.contains(first_word, case=False, na=False)]
-        away_matches = df[df['AwayTeam'].str.contains(first_word, case=False, na=False)]
+        full_name = team_name.lower()
+        first_word = team_name.split()[0].lower()
+        
+        # Öncelikli tam eşleşme veya ilk kelime eşleşmesi
+        home_matches = df[
+            (df['HomeTeam'].str.lower().str.contains(full_name, na=False)) | 
+            (df['HomeTeam'].str.lower().str.contains(first_word, na=False))
+        ]
+        away_matches = df[
+            (df['AwayTeam'].str.lower().str.contains(full_name, na=False)) | 
+            (df['AwayTeam'].str.lower().str.contains(first_word, na=False))
+        ]
         
         total_matches = len(home_matches) + len(away_matches)
         if total_matches == 0:

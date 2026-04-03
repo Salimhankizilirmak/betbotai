@@ -67,14 +67,13 @@ async def api_upcoming(recommended: bool = False):
     Tüm yaklaşan maçları veya sadece önerilenleri döner.
     """
     sports_to_fetch = [
-        "soccer_epl", # Premier League
-        "soccer_spain_la_liga", # La Liga
-        "soccer_italy_serie_a", # Serie A
-        "soccer_germany_bundesliga", # Bundesliga
-        "soccer_france_ligue_one", # Ligue 1
-        "soccer_turkey_super_league", # Süper Lig
-        "soccer_turkey_1_league", # TFF 1. Lig
-        "soccer_uefa_champs_league", # Champions League
+        "soccer_turkey_super_league",
+        "soccer_epl", 
+        "soccer_spain_la_liga", 
+        "soccer_italy_serie_a", 
+        "soccer_germany_bundesliga", 
+        "soccer_france_ligue_one", 
+        "soccer_uefa_champs_league", 
         "basketball_nba",
         "basketball_euroleague",
         "upcoming"
@@ -86,6 +85,7 @@ async def api_upcoming(recommended: bool = False):
             data = await get_odds(sport)
             if isinstance(data, list):
                 all_raw.extend(data)
+                logging.info(f"API: {sport} liginden {len(data)} maç çekildi.")
         except Exception as e:
             logging.error(f"Error fetching odds for {sport}: {e}")
             
@@ -130,14 +130,19 @@ async def api_analyze(event_id: str):
             return cached
             
     try:
-        soccer = await get_odds("soccer_uefa_champs_league_women")
-        basketball = await get_odds("basketball_euroleague")
-        nba = await get_odds("basketball_nba")
-        upcoming = await get_odds("upcoming")
+        sports_to_check = [
+            "soccer_epl", "soccer_spain_la_liga", "soccer_italy_serie_a",
+            "soccer_germany_bundesliga", "soccer_france_ligue_one",
+            "soccer_turkey_super_league", "soccer_turkey_1_league",
+            "soccer_uefa_champs_league", "basketball_nba",
+            "basketball_euroleague", "upcoming"
+        ]
         
         all_odds = []
-        for l in [soccer, basketball, nba, upcoming]:
-            if isinstance(l, list): all_odds.extend(l)
+        for sport in sports_to_check:
+            data = await get_odds(sport)
+            if isinstance(data, list):
+                all_odds.extend(data)
             
         match_data = next((m for m in all_odds if m["id"] == event_id), None)
         
