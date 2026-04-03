@@ -107,6 +107,14 @@ function renderMatches(matches, recommendedOnly, targetId) {
     const grid = document.getElementById(targetId);
     if (!grid) return;
 
+    // Tracked Matches Dinamik Guncellemesi
+    if (recommendedOnly) {
+        const liveCountEl = document.getElementById('live-count');
+        if (liveCountEl) {
+            liveCountEl.innerText = matches.length;
+        }
+    }
+
     if (matches.length === 0) {
         grid.innerHTML = `<div class="glass-panel" style="padding: 20px; grid-column: 1 / -1; text-align: center; color: var(--text-secondary);"><i class="fa-solid fa-brain"></i> Baron şu an bülteni tarıyor olabilir, veya yüksek güvenli maç bulunamadı.</div>`;
         return;
@@ -300,6 +308,20 @@ function updateBalance(balance, profit, bets) {
             profEl.innerHTML = `<span style="color: #94a3b8;"><i class="fa-solid fa-minus"></i> 0.00 BB</span>`;
         }
     }
+    
+    // YZ Başarı Oranı Dinamik Hesaplama
+    const accuracyEl = document.getElementById('ai-accuracy');
+    if (accuracyEl) {
+        const resolvedBets = (bets || []).filter(b => b.status === 'WON' || b.status === 'LOST');
+        const wonBets = resolvedBets.filter(b => b.status === 'WON');
+        if (resolvedBets.length > 0) {
+            const acc = (wonBets.length / resolvedBets.length) * 100;
+            accuracyEl.innerText = `${acc.toFixed(1)}%`;
+        } else {
+            accuracyEl.innerText = `0.0%`;
+        }
+    }
+
     renderBalanceHistoryChart(bets);
     renderPendingBets(bets);
     renderHistoryList(bets);
@@ -313,7 +335,7 @@ function renderBalanceHistoryChart(bets) {
 
     const historyLines = [...(bets || [])]
         .filter(b => b.status === 'WON' || b.status === 'LOST')
-        .sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+        .sort((a,b) => new Date(a.created_at.replace(" ", "T")) - new Date(b.created_at.replace(" ", "T")));
 
     let currentBal = 10000;
     const labels = ['Başlangıç'];
@@ -367,7 +389,8 @@ function renderPendingBets(bets) {
     const list = document.getElementById('bets-list');
     if (!list) return;
 
-    const pending = (bets || []).filter(b => b.status === 'PENDING').sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    const pending = (bets || []).filter(b => b.status === 'PENDING')
+        .sort((a,b) => new Date(b.created_at.replace(" ", "T")) - new Date(a.created_at.replace(" ", "T")));
     list.innerHTML = '';
     
     if (pending.length === 0) {
@@ -400,7 +423,9 @@ function renderHistoryList(bets) {
     const list = document.getElementById('history-list');
     if (!list) return;
 
-    const finished = (bets || []).filter(b => b.status === 'WON' || b.status === 'LOST').sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    // Use replace(" ", "T") to ensure cross-browser parsing for SQLite datetime
+    const finished = (bets || []).filter(b => b.status === 'WON' || b.status === 'LOST')
+        .sort((a,b) => new Date(b.created_at.replace(" ", "T")) - new Date(a.created_at.replace(" ", "T")));
     list.innerHTML = '';
     
     if (finished.length === 0) {

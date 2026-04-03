@@ -391,13 +391,21 @@ async def background_props_analyzer():
             events = await get_odds("basketball_nba")
             if isinstance(events, list) and len(events) > 0:
                 all_recs = []
-                # İlk 6 yaklaşan maç için prop çek
-                for event in events[:6]:
-                    recs = await analyze_nba_player_props(
-                        event["id"],
-                        event.get("home_team", ""),
-                        event.get("away_team", "")
-                    )
+                # Canlı maçları pas geç (Commence time kontrolü)
+                from datetime import timezone
+                now_utc = datetime.now(timezone.utc)
+                valid_events = []
+                for e in events:
+                    if 'commence_time' in e:
+                        try:
+                            c_time = datetime.strptime(e['commence_time'], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                            if c_time > now_utc:
+                                valid_events.append(e)
+                        except:
+                            pass # Parse hatası olursa riske atma, alma
+                            
+                for event in valid_events[:6]:
+                    recs = await analyze_nba_player_props(event)
                     all_recs.extend(recs)
                     await asyncio.sleep(2) # Nefes payı
                 
@@ -441,7 +449,7 @@ async def background_props_analyzer():
                                 "sport_key": "basketball_nba",
                                 "home_team": prop["home_team"],
                                 "away_team": prop["away_team"],
-                                "commence_time": datetime.now(IST).isoformat()
+                                "commence_time": prop.get("commence_time", datetime.now(IST).isoformat())
                             }
                             
                             await asyncio.to_thread(place_virtual_bet, mock_match, analysis, custom_amount=final_stake)

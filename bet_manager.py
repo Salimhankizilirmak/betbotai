@@ -1,5 +1,7 @@
-import sqlite3
+import psycopg2
+from psycopg2.extras import RealDictCursor
 import os
+import contextlib
 import logging
 from datetime import datetime
 import urllib.request
@@ -7,6 +9,8 @@ import urllib.parse
 import threading
 from difflib import SequenceMatcher
 from dotenv import load_dotenv
+import re
+from x_client import post_tweet
 
 # Global DB Lock for writes
 db_lock = threading.Lock()
@@ -36,55 +40,66 @@ def send_telegram_message(text: str):
                 logging.info(f"Telegram response for {chat_id}: {res_body}")
         except Exception as e:
             logging.error(f"Telegram execution failed for {chat_id}: {e}")
+            
+    # X (Twitter) Gönderimi
+    try:
+        # Telegram HTML taglerini temizle (<b>, <i>, </b>, </i> vb.)
+        clean_text = re.sub(r'<[^>]+>', '', text)
+        
+        # Twitter'a gönder (Ayrı bir thread'de çalıştırmak bloklamayı engeller)
+        threading.Thread(target=post_tweet, args=(clean_text,), daemon=True).start()
+    except Exception as e:
+        logging.error(f"Failed to trigger X posting: {e}")
 
-DATABASE_FILE = os.path.join("data", "bets.db")
+DATABASE_URL = os.getenv("DATABASE_URL")
 BET_AMOUNT = 100.0  # Sanal 100 BB
 
 def init_db():
     try:
-        if not os.path.exists("data"):
-            os.makedirs("data")
-        # Multi-thread desteği için check_same_thread=False
         with db_lock:
-            with sqlite3.connect(DATABASE_FILE, check_same_thread=False) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS bets (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        match_id TEXT UNIQUE,
-                        sport_key TEXT,
-                        home_team TEXT,
-                        away_team TEXT,
-                        commence_time TEXT,
-                        risk_score INTEGER,
-                        bet_target TEXT,
-                        odds_value REAL,
-                        bet_amount REAL DEFAULT 100.0,
-                        status TEXT DEFAULT 'PENDING',
-                        profit REAL DEFAULT 0.0,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                
-                # Migration check: Add bet_amount if it doesn't exist
-                cursor.execute("PRAGMA table_info(bets)")
-                columns = [column[1] for column in cursor.fetchall()]
-                if 'bet_amount' not in columns:
-                    cursor.execute("ALTER TABLE bets ADD COLUMN bet_amount REAL DEFAULT 100.0")
-                    logging.info("Database migration: Added bet_amount column.")
+            with psycopg2.connect(DATABASE_URL) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS bets (
+                            id SERIAL PRIMARY KEY,
+                            match_id TEXT UNIQUE,
+                            sport_key TEXT,
+                            home_team TEXT,
+                            away_team TEXT,
+                            commence_time TEXT,
+                            risk_score INTEGER,
+                            bet_target TEXT,
+                            odds_value REAL,
+                            bet_amount REAL DEFAULT 100.0,
+                            status TEXT DEFAULT 'PENDING',
+                            profit REAL DEFAULT 0.0,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """)
                     
-                conn.commit()
+                    # Migration check: Add bet_amount if it doesn't exist
+                    cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name='bets'")
+                    columns = [row[0] for row in cursor.fetchall()]
+                    if 'bet_amount' not in columns:
+                        cursor.execute("ALTER TABLE bets ADD COLUMN bet_amount REAL DEFAULT 100.0")
+                        logging.info("Database migration: Added bet_amount column.")
+                        
+                    conn.commit()
     except Exception as e:
         logging.error(f"Database init error: {e}")
 
 # Uygulama açılışında DB kontrolü/kurulumu
 init_db()
 
+import contextlib
+
+@contextlib.contextmanager
 def get_db_connection():
-    """Güvenli DB bağlantısı döner."""
-    conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 def get_performance_metrics():
     """
@@ -184,7 +199,7 @@ def place_virtual_bet(event, ai_analysis, custom_amount=None):
             cursor = conn.cursor()
             
             # Check if already bet
-            cursor.execute('SELECT id FROM bets WHERE match_id = ?', (match_id,))
+            cursor.execute('SELECT id FROM bets WHERE match_id = %s', (match_id,))
             if cursor.fetchone():
                 return False
             
@@ -208,7 +223,7 @@ def place_virtual_bet(event, ai_analysis, custom_amount=None):
             
             cursor.execute('''
                 INSERT INTO bets (match_id, sport_key, home_team, away_team, commence_time, risk_score, bet_target, odds_value, bet_amount, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'PENDING')
             ''', (match_id, sport_key, home_team, away_team, commence_time, risk_score, bet_target, odds_value, amount))
             
             with db_lock:
@@ -253,7 +268,7 @@ def get_recent_performance(limit=10):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM bets WHERE status != 'PENDING' ORDER BY created_at DESC LIMIT ?", (limit,))
+            cursor.execute("SELECT * FROM bets WHERE status != 'PENDING' ORDER BY created_at DESC LIMIT %s", (limit,))
             rows = cursor.fetchall()
             summary = []
             for r in rows:
@@ -271,7 +286,7 @@ def check_bet_exists(match_id):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT 1 FROM bets WHERE match_id = ?", (match_id,))
+            cursor.execute("SELECT 1 FROM bets WHERE match_id = %s", (match_id,))
             return cursor.fetchone() is not None
     except:
         return False
@@ -300,7 +315,7 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT bet_target, odds_value, bet_amount, home_team, away_team FROM bets WHERE match_id = ? AND status = 'PENDING'", (match_id,))
+            cursor.execute("SELECT bet_target, odds_value, bet_amount, home_team, away_team FROM bets WHERE match_id = %s AND status = 'PENDING'", (match_id,))
             bet = cursor.fetchone()
             
             if not bet:
@@ -325,7 +340,9 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
                     # Bekleyen bahis bilgilerini zaten yukarda aldık (prediction, odds, amount, home, away)
                     # Ama tarih eksik. Tarihi DB'den çekelim.
                     with get_db_connection() as conn_local:
-                        row = conn_local.execute("SELECT commence_time FROM bets WHERE match_id = ?", (match_id,)).fetchone()
+                        cursor_local = conn_local.cursor()
+                        cursor_local.execute("SELECT commence_time FROM bets WHERE match_id = %s", (match_id,))
+                        row = cursor_local.fetchone()
                         commence_time = row['commence_time'] if row else None
                     
                     if commence_time:
@@ -382,7 +399,7 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
             profit = (amount * safe_odds) - amount if is_winner else -amount
             
             with db_lock:
-                cursor.execute("UPDATE bets SET status = ?, profit = ? WHERE match_id = ?", (status, profit, match_id))
+                cursor.execute("UPDATE bets SET status = %s, profit = %s WHERE match_id = %s", (status, profit, match_id))
                 conn.commit()
             
             # Telegram bildirimi

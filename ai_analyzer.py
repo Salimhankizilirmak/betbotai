@@ -20,6 +20,8 @@ from bet_manager import place_virtual_bet, get_recent_performance, get_performan
 from nba_player_props import analyze_nba_player_props
 from euroleague_data import get_euroleague_team_stats, get_euroleague_player_trends
 from premier_league_data import get_pl_team_stats, get_pl_player_trends
+from api_key_manager import gemini_api_manager
+
 
 load_dotenv()
 
@@ -315,9 +317,33 @@ async def calculate_risk(match_data):
         
         gemini_analysis = ""
         for model_name in AI_MODELS:
-            resp = await retry_with_backoff(client.aio.models.generate_content, model=model_name, contents=gemini_initial_prompt)
-            if resp:
-                gemini_analysis = resp.text
+            current_key = gemini_api_manager.get_current_key()
+            if not current_key:
+                break
+                
+            client = genai.Client(api_key=current_key, http_options={'api_version': 'v1beta'})
+            
+            # Rotation support handled in retry_with_backoff for Gemini? No, let's just do standard request.
+            # If 429 occurs, retry_with_backoff will sleep, but we should also rotate the key if it fails.
+            max_gemini_retries = gemini_api_manager.get_max_retries() * 2
+            for attempt in range(max_gemini_retries):
+                cur_key = gemini_api_manager.get_current_key()
+                client = genai.Client(api_key=cur_key, http_options={'api_version': 'v1beta'})
+                try:
+                    resp = await client.aio.models.generate_content(model=model_name, contents=gemini_initial_prompt)
+                    if resp:
+                        gemini_analysis = resp.text
+                        break
+                except Exception as e:
+                    if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                        logging.warning(f"Kota doldu (429), API Key değiştiriliyor... (Deneme {attempt+1})")
+                        gemini_api_manager.rotate_key()
+                        await asyncio.sleep(2)
+                    else:
+                        logging.error(f"Gemini API hatası: {e}")
+                        break
+            
+            if gemini_analysis:
                 break
         
         if not gemini_analysis:
@@ -344,9 +370,29 @@ async def calculate_risk(match_data):
         
         final_result_text = ""
         for model_name in AI_MODELS:
-            resp = await retry_with_backoff(client.aio.models.generate_content, model=model_name, contents=final_prompt)
-            if resp:
-                final_result_text = resp.text
+            current_key = gemini_api_manager.get_current_key()
+            if not current_key:
+                break
+                
+            max_gemini_retries = gemini_api_manager.get_max_retries() * 2
+            for attempt in range(max_gemini_retries):
+                cur_key = gemini_api_manager.get_current_key()
+                client = genai.Client(api_key=cur_key, http_options={'api_version': 'v1beta'})
+                try:
+                    resp = await client.aio.models.generate_content(model=model_name, contents=final_prompt)
+                    if resp:
+                        final_result_text = resp.text
+                        break
+                except Exception as e:
+                    if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                        logging.warning(f"Kota doldu (429), API Key değiştiriliyor... (Deneme {attempt+1})")
+                        gemini_api_manager.rotate_key()
+                        await asyncio.sleep(2)
+                    else:
+                        logging.error(f"Gemini API hatası: {e}")
+                        break
+            
+            if final_result_text:
                 break
         
         if not final_result_text:

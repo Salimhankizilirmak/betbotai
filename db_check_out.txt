@@ -1,0 +1,50 @@
+{
+  "total": 3,
+  "bets": [
+    {
+      "id": 24,
+      "match_id": "615a89d3d8b0b6f1d92ea174a6de7b82",
+      "sport_key": "basketball_euroleague",
+      "home_team": "KK Partizan NIS",
+      "away_team": "ASVEL Lyon Villeurbanne",
+      "commence_time": "2026-03-24T19:45:00Z",
+      "risk_score": 40,
+      "bet_target": "KK Partizan NIS -7.5",
+      "odds_value": 1.91,
+      "status": "PENDING",
+      "profit": 0.0,
+      "created_at": "2026-03-24 18:31:36",
+      "bet_amount": 200.0
+    },
+    {
+      "id": 23,
+      "match_id": "8c408f9cb0a0fa5e763f8030236eb90b",
+      "sport_key": "basketball_euroleague",
+      "home_team": "AS Monaco",
+      "away_team": "Pallacanestro Olimpia Milano",
+      "commence_time": "2026-03-24T18:01:00Z",
+      "risk_score": 35,
+      "bet_target": "AWAY_WIN",
+      "odds_value": 1.48,
+      "status": "PENDING",
+      "profit": 0.0,
+      "created_at": "2026-03-24 18:30:21",
+      "bet_amount": 200.0
+    },
+    {
+      "id": 22,
+      "match_id": "97cbd19871763ae2a2453e8842623ab4",
+      "sport_key": "basketball_euroleague",
+      "home_team": "Maccabi Tel Aviv",
+      "away_team": "Fenerbahce SK",
+      "commence_time": "2026-03-24T17:30:00Z",
+      "risk_score": 15,
+      "bet_target": "HOME_WIN",
+      "odds_value": 1.17,
+      "status": "PENDING",
+      "profit": 0.0,
+      "created_at": "2026-03-24 18:24:01",
+      "bet_amount": 500.0
+    }
+  ]
+}
