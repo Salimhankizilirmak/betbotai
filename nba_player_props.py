@@ -194,7 +194,7 @@ async def evaluate_prop(player_name: str, stat: str, line: float,
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT status FROM bets WHERE match_id LIKE ? AND status = 'LOST' ORDER BY created_at DESC LIMIT 3", (f"PROP_%_{player_name}_{stat}",))
+                cursor.execute("SELECT status FROM bets WHERE match_id LIKE %s AND status = 'LOST' ORDER BY created_at DESC LIMIT 3", (f"PROP_%_{player_name}_{stat}",))
                 past_losses = len(cursor.fetchall())
         except Exception as e:
             logging.error(f"Prop memory fetch error: {e}")
