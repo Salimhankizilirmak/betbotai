@@ -248,19 +248,34 @@ async def calculate_risk(match_data):
     away_stats = None
     player_prop_trends = "Veri yok"
     
+    ODDS_TO_STATS_MAP = {
+        "soccer_epl": "EPL",
+        "soccer_spain_la_liga": "LA_LIGA",
+        "soccer_italy_serie_a": "SERIE_A",
+        "soccer_germany_bundesliga": "BUNDESLIGA",
+        "soccer_france_ligue_one": "LIGUE_1",
+        "soccer_turkey_super_league": "TURKEY",
+        "soccer_turkey_1_league": "TURKEY_2"
+    }
+
     if "soccer" in sport_key:
-        if "premier_league" in sport_key:
-            # Premier League İstatistik Entegrasyonu
+        league_key = ODDS_TO_STATS_MAP.get(sport_key)
+        if sport_key == "soccer_epl":
+            # Premier League Özel İstatistik Entegrasyonu (API)
             try:
                 home_stats = await get_pl_team_stats(home_name)
                 away_stats = await get_pl_team_stats(away_name)
                 player_prop_trends = await get_pl_player_trends(home_name)
             except Exception as e:
                 logging.error(f"Premier League stats error: {e}")
+        elif league_key:
+            # Diğer Soccer Ligleri (CSV Tabanlı)
+            home_stats = await get_team_stats(home_name, league_key=league_key)
+            away_stats = await get_team_stats(away_name, league_key=league_key)
         else:
-            # Diğer Soccer Ligleri (EPL/La Liga csv)
-            home_stats = await get_team_stats(home_name)
-            away_stats = await get_team_stats(away_name)
+            # Bilinmeyen lig, varsayılan EPL CSV (Geriye dönük uyumluluk)
+            home_stats = await get_team_stats(home_name, league_key="EPL")
+            away_stats = await get_team_stats(away_name, league_key="EPL")
     elif "basketball" in sport_key:
         if "nba" in sport_key:
             home_stats = await asyncio.to_thread(get_nba_team_stats, home_name, away_name)

@@ -67,9 +67,16 @@ async def api_upcoming(recommended: bool = False):
     Tüm yaklaşan maçları veya sadece önerilenleri döner.
     """
     sports_to_fetch = [
-        "soccer_uefa_champs_league_women",
-        "basketball_euroleague",
+        "soccer_epl", # Premier League
+        "soccer_spain_la_liga", # La Liga
+        "soccer_italy_serie_a", # Serie A
+        "soccer_germany_bundesliga", # Bundesliga
+        "soccer_france_ligue_one", # Ligue 1
+        "soccer_turkey_super_league", # Süper Lig
+        "soccer_turkey_1_league", # TFF 1. Lig
+        "soccer_uefa_champs_league", # Champions League
         "basketball_nba",
+        "basketball_euroleague",
         "upcoming"
     ]
     
@@ -316,14 +323,27 @@ async def background_analyzer():
             # Önce sonuçları temizle ki bütçe güncellensin
             await check_and_resolve_all_pending_bets()
             
-            soccer = await get_odds("soccer_uefa_champs_league_women")
-            basket = await get_odds("basketball_euroleague")
-            nba = await get_odds("basketball_nba")
+            sports_to_analyze = [
+                "soccer_turkey_super_league",
+                "soccer_turkey_1_league",
+                "soccer_epl",
+                "soccer_spain_la_liga",
+                "soccer_italy_serie_a",
+                "soccer_germany_bundesliga",
+                "soccer_france_ligue_one",
+                "soccer_uefa_champs_league",
+                "basketball_nba",
+                "basketball_euroleague"
+            ]
             
             combined = []
-            if isinstance(soccer, list): combined.extend(soccer[:10])
-            if isinstance(basket, list): combined.extend(basket[:10])
-            if isinstance(nba, list): combined.extend(nba[:10])
+            for sport in sports_to_analyze:
+                try:
+                    data = await get_odds(sport)
+                    if isinstance(data, list):
+                        combined.extend(data[:5]) # Her ligden en yakın 5 maçı al (Rate limit koruması)
+                except Exception as ex:
+                    logging.error(f"Error fetching {sport} for background analysis: {ex}")
             
             # Zamanı en yakın olanları önce analiz yap ki dashboard hemen dolsun
             combined.sort(key=lambda x: x.get('commence_time', ''))
