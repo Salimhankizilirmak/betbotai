@@ -32,11 +32,6 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 # Clients
-# Clients
-client = genai.Client(
-    api_key=GEMINI_API_KEY,
-    http_options={'api_version': 'v1beta'} # v1 yerine v1beta kullanarak 404'ü çözün
-)
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 # Groq API'sini OpenAI kütüphanesi üzerinden çağırıyoruz (Daha stabil)
 groq_client = OpenAI(
