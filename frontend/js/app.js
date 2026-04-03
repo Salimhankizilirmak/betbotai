@@ -1,4 +1,5 @@
 const API_BASE_URL = ''; // Relative paths for unified serving
+window.allMatches = []; // Global storage for search functionality
 
 document.addEventListener('DOMContentLoaded', () => {
     const dateEl = document.getElementById('current-date');
@@ -50,7 +51,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const btn = e.target.closest('.toggle-analysis');
             const card = btn.closest('.match-card');
             const content = card.querySelector('.baron-report-content');
-            const icon = btn.querySelector('i');
             
             if (content.style.maxHeight) {
                 content.style.maxHeight = null;
@@ -61,7 +61,43 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
+    // Search Input Listener
+    const searchInput = document.getElementById('matchSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            handleSearch(e.target.value);
+        });
+    }
 });
+
+function handleSearch(query) {
+    if (!query || query.trim() === '') {
+        // If search is empty, show default recommended matches in live feed or all matches in upcoming
+        const isLivePage = document.querySelector('.nav-item.active').getAttribute('data-page') === 'page-live';
+        if (isLivePage) {
+            const recommended = window.allMatches.filter(m => m.ai_analysis && m.ai_analysis.is_recommended);
+            renderMatches(recommended, true, 'matches-grid');
+        } else {
+            renderMatches(window.allMatches, false, 'upcoming-grid');
+        }
+        return;
+    }
+
+    const q = query.toLowerCase().trim();
+    const filtered = window.allMatches.filter(m => 
+        m.home_team.toLowerCase().includes(q) || 
+        m.away_team.toLowerCase().includes(q) || 
+        (m.sport_title && m.sport_title.toLowerCase().includes(q)) ||
+        (m.sport_key && m.sport_key.toLowerCase().includes(q))
+    );
+
+    // Render search results to whichever grid is currently relevant or primarily to the live grid
+    const activePage = document.querySelector('.nav-item.active').getAttribute('data-page');
+    const targetGrid = activePage === 'page-upcoming' ? 'upcoming-grid' : 'matches-grid';
+    
+    renderMatches(filtered, false, targetGrid);
+}
 
 async function fetchMatches(recommendedOnly = true) {
     const gridId = recommendedOnly ? 'matches-grid' : 'upcoming-grid';
@@ -77,6 +113,9 @@ async function fetchMatches(recommendedOnly = true) {
         const data = await response.json();
         
         let matches = Array.isArray(data) ? data : (data.matches || []);
+        
+        // Update global cache for search
+        window.allMatches = matches;
         
         if (recommendedOnly) {
             matches = matches.filter(m => m.ai_analysis && m.ai_analysis.is_recommended);
