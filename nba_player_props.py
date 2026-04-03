@@ -7,9 +7,12 @@ import httpx
 from dotenv import load_dotenv
 from nba_api.stats.static import players as nba_players
 from nba_api.stats.endpoints import playergamelog
+from api_key_manager import odds_api_manager
+import nba_data
+from bet_manager import get_db_connection
+
 
 load_dotenv()
-ODDS_API_KEY = os.getenv("ODDS_API_KEY")
 BASE_URL = "https://api.the-odds-api.com/v4"
 
 # Cache: player game logs
@@ -30,22 +33,34 @@ async def get_nba_event_props(event_id: str) -> list:
 
     markets = "player_points,player_rebounds,player_assists"
     url = f"{BASE_URL}/sports/basketball_nba/events/{event_id}/odds"
-    params = {
-        "apiKey": ODDS_API_KEY,
-        "regions": "us",
-        "markets": markets,
-        "oddsFormat": "decimal"
-    }
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(url, params=params)
-            if resp.status_code != 200:
-                logging.warning(f"Player props API returned {resp.status_code} for event {event_id}")
-                return []
-            data = resp.json()
-            props = _parse_props(data)
-            _props_cache[event_id] = {"data": props, "ts": now}
-            return props
+            max_retries = odds_api_manager.get_max_retries()
+            for attempt in range(max_retries):
+                api_key = odds_api_manager.get_current_key()
+                params = {
+                    "apiKey": api_key,
+                    "regions": "us",
+                    "markets": markets,
+                    "oddsFormat": "decimal"
+                }
+                resp = await client.get(url, params=params)
+                
+                if resp.status_code in [401, 403, 429]:
+                    logging.warning(f"get_nba_event_props: API Key {api_key[:6]}... failed ({resp.status_code}). Rotating...")
+                    odds_api_manager.rotate_key()
+                    await asyncio.sleep(1)
+                    continue
+                    
+                if resp.status_code != 200:
+                    logging.warning(f"Player props API returned {resp.status_code} for event {event_id}")
+                    return []
+                
+                data = resp.json()
+                props = _parse_props(data)
+                _props_cache[event_id] = {"data": props, "ts": now}
+                return props
+            return []
     except Exception as e:
         logging.error(f"Player props fetch error: {e}")
         return []
@@ -155,7 +170,7 @@ async def get_player_recent_avg(player_name: str, stat: str, games: int = 5) -> 
     return await _fetch_player_gamelog_async(player_id, stat, games)
 
 async def evaluate_prop(player_name: str, stat: str, line: float,
-                        over_odds: float, recent_games: int = 3) -> dict:
+                        over_odds: float, opponent: str = "", recent_games: int = 3) -> dict:
     # Kullanıcı 5 maçlık detay istediği için her zaman 5 çekiyoruz
     form = await get_player_recent_avg(player_name, stat, games=5)
     all_last_games = form.get("last_games", [])
@@ -173,6 +188,44 @@ async def evaluate_prop(player_name: str, stat: str, line: float,
     if games_below >= 2 and deficit > 0:
         pct_below = (deficit / line) * 100
         confidence = min(90, int(50 + pct_below))
+        
+        # 1. VERİTABANI ÖĞRENME (Geçmiş Hatalardan Ders Çıkarma)
+        past_losses = 0
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT status FROM bets WHERE match_id LIKE ? AND status = 'LOST' ORDER BY created_at DESC LIMIT 3", (f"PROP_%_{player_name}_{stat}",))
+                past_losses = len(cursor.fetchall())
+        except Exception as e:
+            logging.error(f"Prop memory fetch error: {e}")
+            
+        penalty_reason = ""
+        if past_losses > 0:
+            penalty = past_losses * 15 # Her kayıp için 15 puan sil 
+            confidence -= penalty
+            penalty_reason = f" [! {past_losses} eski kayıptan {-penalty} ceza !]"
+            if past_losses >= 2:
+                # 2 kere kaybettiyse tamamen pas geç
+                return {"recommendation": None, "reason": "Kara liste (Üst üste kayıp)", "confidence": 0}
+
+        # 2. RAKİP EŞLEŞMESİ (Zorluk Analizi)
+        opp_modifier = ""
+        if opponent:
+            df = nba_data.fetch_nba_standings()
+            if df is not None:
+                try:
+                    opp_row = df[df['TeamName'].str.contains(opponent.split()[-1], case=False, na=False)]
+                    if not opp_row.empty:
+                        win_pct = float(opp_row.iloc[0].get('WinPCT', '0.50'))
+                        # Defansif zoru win_pct basitleştirilmiş proxy olarak al: win_pct > 0.6 zorlu, < 0.4 kolay
+                        if win_pct > 0.60:
+                            confidence -= 8
+                            opp_modifier = f" (Rakip '{opponent}' formda/zorlu -8 Güven)"
+                        elif win_pct < 0.40:
+                            confidence += 5
+                            opp_modifier = f" (Rakip '{opponent}' zayıf, +5 Güven)"
+                except:
+                    pass
 
         return {
             "recommendation": "OVER",
@@ -183,12 +236,16 @@ async def evaluate_prop(player_name: str, stat: str, line: float,
             "games_below": games_below,
             "confidence": confidence,
             "last_games_detail": form.get("last_games_detail", []), # 5 maçın detayı buraya düşer
-            "reason": f"Son {recent_games} macta ort. {avg_3:.1f} (Hat: {line}) — {deficit:.1f} eksik. Patlama bekleniyor! 🔥"
+            "reason": f"Son {recent_games} macta ort. {avg_3:.1f} (Hat: {line}) — {deficit:.1f} eksik.{penalty_reason}{opp_modifier} Patlama bekleniyor! 🔥"
         }
 
     return {"recommendation": None}
 
-async def analyze_nba_player_props(event_id: str, home_team: str, away_team: str) -> list:
+async def analyze_nba_player_props(event: dict) -> list:
+    event_id = event["id"]
+    home_team = event.get("home_team", "")
+    away_team = event.get("away_team", "")
+    
     props = await get_nba_event_props(event_id)
     if not props:
         return []
@@ -201,9 +258,12 @@ async def analyze_nba_player_props(event_id: str, home_team: str, away_team: str
         stat = prop["stat"]
         line = prop["line"]
         over_odds = prop["over_odds"]
+        
+        # Find opponent
+        opponent = away_team if player in home_team else home_team # Basit bir tahmin, ideal senaryoda api'den tam takım ismi de gelebilir
 
         try:
-            result = await evaluate_prop(player, stat, line, over_odds, 3)
+            result = await evaluate_prop(player, stat, line, over_odds, opponent, 3)
             
             if result.get("recommendation") == "OVER" and result.get("confidence", 0) >= 65:
                 # Dynamic bet sizing for player props (max 500 BB)
@@ -231,6 +291,7 @@ async def analyze_nba_player_props(event_id: str, home_team: str, away_team: str
                     "event_id": event_id,
                     "home_team": home_team,
                     "away_team": away_team,
+                    "commence_time": event.get("commence_time"),
                     "bet_target": f"{player} | {stat} OVER {line}",
                     "bet_amount": bet_amount
                 })
@@ -242,3 +303,4 @@ async def analyze_nba_player_props(event_id: str, home_team: str, away_team: str
 
     logging.info(f"Props result: {len(recommendations)} recs from {len(props)} ({home_team} vs {away_team})")
     return sorted(recommendations, key=lambda x: -x["confidence"])
+
