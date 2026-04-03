@@ -312,7 +312,7 @@ async def calculate_risk(match_data):
             f"Sen 'Baron' adında, sadece verilere inanan uzman bir bahis stratejistisin. SADECE TÜRKÇE KONUŞ.\n"
             f"Şu maçı analiz et: {json.dumps(match_data, indent=2)}\n"
             f"TAKIM İSTATİSTİKLERİ: Ev: {home_stats} | Deplasman: {away_stats}\n"
-            f"NBA OYUNCU TRENDLERİ: {player_prop_trends}\n"
+            f"OYUNCU TRENDLERİ / EŞLEŞMELER: {player_prop_trends}\n"
             f"ÖNCEKİ BAHİSLERİN: {past_performance}\n"
             f"GENEL BAŞARI DURUMUN: {ai_metrics}\n\n"
             f"KESİN TALİMATLAR:\n"
