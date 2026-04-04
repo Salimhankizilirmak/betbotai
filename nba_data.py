@@ -132,16 +132,35 @@ def get_nba_player_game_stat(player_name, date_str, stat_type):
     from nba_api.stats.endpoints import playergamelog
     
     try:
-        # Player name search - exact first, then fuzzy fallback
-        search = nba_players.find_players_by_full_name(player_name)
+        # Player name normalization: "C.J. McCollum" -> try as-is, then without dots
+        names_to_try = [player_name]
+        # Noktalı kısaltmalar: "C.J." -> "CJ" dönüşümü
+        no_dot = player_name.replace('.', '').replace('  ', ' ').strip()
+        if no_dot != player_name:
+            names_to_try.append(no_dot)
+        
+        search = []
+        for name_attempt in names_to_try:
+            search = nba_players.find_players_by_full_name(name_attempt)
+            if search:
+                break
+        
         if not search:
-            # Fuzzy: soyadı veya adında geçen oyuncuları bul
+            # Fuzzy: soyadı VE adı içeren oyuncuları bul (nokta temizlenmiş versiyonla da dene)
             last_name = player_name.split()[-1]
-            first_name = player_name.split()[0]
+            first_token = player_name.split()[0].replace('.', '')  # "C.J." → "CJ"
             all_players = nba_players.get_active_players()
+            
+            # Önce hem ad hem soyad eşleşmesi
             search = [p for p in all_players if 
                       last_name.lower() in p['full_name'].lower() and 
-                      first_name.lower() in p['full_name'].lower()]
+                      first_token.lower() in p['full_name'].lower().replace('.', '')]
+            
+            # Sonra sadece soyad (tek kelimeli benzersiz isimler)
+            if not search:
+                search = [p for p in all_players if 
+                          last_name.lower() == p['last_name'].lower()]
+            
             if search:
                 logging.info(f"Fuzzy match found: '{player_name}' -> '{search[0]['full_name']}'")
             else:

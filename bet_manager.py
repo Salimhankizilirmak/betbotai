@@ -338,9 +338,8 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
             is_winner = False
             
             if str(match_id).startswith("PROP_"):
-                # PROP RESOLUTION IMPROVEMENT: Parse player name from bet_target (SQL)
+                # PROP RESOLUTION: Parse player name from bet_target (SQL)
                 # bet_target format: "Carlton Carrington | REB OVER 3.5"
-                import re
                 target_str = str(prediction) # bet_target from SQL
                 match_p = re.search(r'(.*?)\s*\|\s*(\w+)\s+(OVER|UNDER)\s+([\d.]+)', target_str)
                 
