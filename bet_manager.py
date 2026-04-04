@@ -315,20 +315,11 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT bet_target, odds_value, bet_amount, home_team, away_team FROM bets WHERE match_id = %s AND status IN ('PENDING', 'WON', 'LOST')", (match_id,))
+            cursor.execute("SELECT bet_target, odds_value, bet_amount, home_team, away_team FROM bets WHERE match_id = %s AND status = 'PENDING'", (match_id,))
             bet = cursor.fetchone()
             
             if not bet:
-                return False
-            
-            # Only skip if it's already WON/LOST AND no override flag passed
-            current_status_row = None
-            try:
-                cursor.execute("SELECT status FROM bets WHERE match_id = %s", (match_id,))
-                sr = cursor.fetchone()
-                current_status_row = sr['status'] if sr else None
-            except:
-                pass
+                return False  # Zaten sonuçlanmış veya bulunamadı
                 
             prediction = bet['bet_target']
             odds = bet['odds_value']
