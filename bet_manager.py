@@ -354,17 +354,21 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
                             un_match = re.search(r'UNDER\s+([\d.]+)', prediction)
                             
                             try:
+                                target_line = 0.0
                                 if ov_match:
                                     target_line = float(ov_match.group(1))
                                     is_winner = actual_val > target_line
                                 elif un_match:
                                     target_line = float(un_match.group(1))
                                     is_winner = actual_val < target_line
+                                else:
+                                    logging.error(f"Prop direction (OVER/UNDER) not found in {prediction}")
+                                    return False
                                 
                                 h_score, a_score = actual_val, target_line # Stats for display
                                 logging.info(f"PROP RESOLVED: {prop_player} {prop_stat} Actual={actual_val} vs Line={target_line} | Win={is_winner}")
-                            except:
-                                logging.error(f"Prop parsing error for {prediction}")
+                            except Exception as e:
+                                logging.error(f"Prop parsing error for {prediction}: {e}")
                                 return False
                         else:
                             logging.info(f"Prop {match_id} için henüz boxscore verisi yok. Atlanıyor.")
