@@ -3,6 +3,11 @@ from psycopg2.extras import RealDictCursor
 import os
 import contextlib
 import logging
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import os
+import contextlib
+import logging
 from datetime import datetime
 import urllib.request
 import urllib.parse
@@ -10,7 +15,12 @@ import threading
 from difflib import SequenceMatcher
 from dotenv import load_dotenv
 import re
+import json
+import time
 from x_client import post_tweet
+
+REVALIDATION_CACHE_FILE = os.path.join("data", "revalidation_status.json")
+
 
 # Global DB Lock for writes
 db_lock = threading.Lock()
@@ -459,16 +469,25 @@ def get_pending_sports():
 async def revalidate_resolved_bets():
     """
     Son 3 gün içinde sonuçlanmış bahisleri tekrar kontrol eder.
-    Hatalı sonuçlandırılan (Hiyerarşi veya API hatası nedeniyle) bahisleri düzeltir.
+    Optimizasyon: 12 saatte bir kontrol, MS/Totals önceliği ve Timeout koruması.
     """
-    logging.info("🔍 REVALIDATION: Çözümlenen bahisler tekrar doğrulanıyor...")
+    logging.info("🔍 REVALIDATION: Akıllı kontrol başlatılıyor...")
     corrected = 0
     reverted = 0
+    now = time.time()
     
+    # Cache yükle
+    reval_cache = {}
+    if os.path.exists(REVALIDATION_CACHE_FILE):
+        try:
+            with open(REVALIDATION_CACHE_FILE, 'r') as f:
+                reval_cache = json.load(f)
+        except:
+            pass
+
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            # Son 3 günlük tüm sonuçlanmış bahisleri al (Sadece PROP değil, HEPSİ)
             cursor.execute("""
                 SELECT id, match_id, bet_target, odds_value, bet_amount, home_team, away_team, 
                        status, profit, commence_time, sport_key
@@ -478,24 +497,30 @@ async def revalidate_resolved_bets():
                   AND CAST(commence_time AS TIMESTAMP) >= NOW() - INTERVAL '3 days'
             """)
             resolved_bets = cursor.fetchall()
-            logging.info(f"REVALIDATION: {len(resolved_bets)} sonuçlanmış bahis kontrol ediliyor...")
+            
+            # 1. ÖNCELİKLENDİRME: Taraf ve Alt/Üst bahislerini başa al, Player Props'ları sona at
+            resolved_bets.sort(key=lambda b: 1 if str(b['match_id']).startswith('PROP_') else 0)
+            
+            logging.info(f"REVALIDATION: Toplam {len(resolved_bets)} bahis taranacak...")
             
             import nba_data
             from oddsapi_client import get_scores
-            
-            # Spor bazlı skor önbelleği (API çağrısını azaltmak için)
             score_cache = {}
 
             for bet in resolved_bets:
-                db_id = bet['id']
+                db_id = str(bet['id'])
                 match_id = bet['match_id']
                 target_str = str(bet['bet_target'])
                 commence_time = bet['commence_time']
                 current_status = bet['status']
                 sport = bet['sport_key']
+
+                # 2. 12 SAATLİK BEKLEME KONTROLÜ
+                last_check = reval_cache.get(db_id, 0)
+                if now - last_check < 43200: # 12 saat
+                    continue
                 
                 try:
-                    # 1. Gelecek maç kontrolü
                     from datetime import datetime, timezone
                     if hasattr(commence_time, 'tzinfo'):
                         game_time = commence_time if commence_time.tzinfo else commence_time.replace(tzinfo=timezone.utc)
@@ -508,6 +533,7 @@ async def revalidate_resolved_bets():
                             conn.commit()
                         reverted += 1
                         logging.warning(f"REVALIDATION REVERTED: Gelecek maç PENDING yapıldı: {match_id}")
+                        reval_cache[db_id] = now
                         continue
                     
                     correct_winner_flag = False
@@ -515,7 +541,7 @@ async def revalidate_resolved_bets():
                     actual_stat_text = ""
                     is_void = False
 
-                    # 2. PROP BAHİS Mİ?
+                    # 3. PROP BAHİS Mİ?
                     if str(match_id).startswith("PROP_"):
                         match_p = re.search(r'(.*?)\s*\|\s*(\w+)\s+(OVER|UNDER)\s+([\d.]+)', target_str)
                         if match_p:
@@ -525,7 +551,16 @@ async def revalidate_resolved_bets():
                             line = float(match_p.group(4))
                             stat_map = {"PTS": "PTS", "REB": "REB", "AST": "AST", "POINTS": "PTS", "REBOUNDS": "REB", "ASSISTS": "AST"}
                             
-                            actual_val = nba_data.get_nba_player_game_stat(p_name, str(commence_time), stat_map.get(m_key, "PTS"))
+                            # NBA API Timeout Koruması
+                            try:
+                                actual_val = nba_data.get_nba_player_game_stat(p_name, str(commence_time), stat_map.get(m_key, "PTS"))
+                            except Exception as api_err:
+                                if "timeout" in str(api_err).lower():
+                                    logging.warning(f"REVALIDATION TIMEOUT: {p_name} için NBA API zaman aşımı. 1 saat erteleniyor.")
+                                    reval_cache[db_id] = now - 39600 # 12 saat - 1 saat = 11 saat (yani 1 saat sonra tekrar dener)
+                                    continue
+                                raise api_err
+
                             if actual_val is not None:
                                 found_data = True
                                 if actual_val == -999.0: # DNP
@@ -537,9 +572,10 @@ async def revalidate_resolved_bets():
                                     is_void = False
                                     actual_stat_text = f"{actual_val} (Hat: {line})"
                             else:
+                                reval_cache[db_id] = now # Veri yoksa da bugün için kontrol edilmiş say
                                 continue
                     
-                    # 3. NORMAL MAÇ BAHSİ (H2H / TOTALS)
+                    # 4. NORMAL MAÇ BAHSİ (H2H / TOTALS)
                     else:
                         if sport not in score_cache:
                             score_cache[sport] = await get_scores(sport)
@@ -559,7 +595,6 @@ async def revalidate_resolved_bets():
                                 hs = s1 if n1 == h_team else s2
                                 ascore = s2 if n1 == h_team else s1
                                 
-                                # Winner Kodunu Belirle
                                 winner_code = "DRAW"
                                 if hs > ascore: winner_code = "HOME_WIN"
                                 elif ascore > hs: winner_code = "AWAY_WIN"
@@ -573,7 +608,6 @@ async def revalidate_resolved_bets():
                                     elif winner_code == "AWAY_WIN": correct_winner_flag = fuzzy_match(t_team, a_team)
                                     else: correct_winner_flag = False
                                 else:
-                                    # Totals check
                                     total = hs + ascore
                                     over_m = re.search(r'OVER\s+([\d.]+)', prediction.upper())
                                     under_m = re.search(r'UNDER\s+([\d.]+)', prediction.upper())
@@ -585,21 +619,20 @@ async def revalidate_resolved_bets():
                             else:
                                 found_data = False
                         else:
+                            reval_cache[db_id] = now # Tamamlanmamış maç, sonra bak
                             continue
 
-                    # 4. Karşılaştır ve Düzelt
+                    # 5. Karşılaştır ve Düzelt
                     if found_data:
                         correct_status = 'WON' if correct_winner_flag else 'LOST'
                         is_winner = correct_winner_flag
-                        
-                        # Fix Profit Calculation for Corrected Status
                         odds = bet['odds_value']
                         amount = bet.get('bet_amount', 100.0)
                         safe_odds = odds if odds and odds > 1.0 else 1.90
                         
                         if is_void: # DNP durumu
                             new_profit = 0.0
-                            correct_status = 'LOST' # Profit 0 olduğu sürece Lost görünmesi sorun değil (Void)
+                            correct_status = 'LOST' 
                         else:
                             new_profit = (amount * safe_odds) - amount if is_winner else -amount
 
@@ -610,7 +643,6 @@ async def revalidate_resolved_bets():
                             corrected += 1
                             logging.info(f"✅ REVALIDATION FIXED: {target_str} | {current_status} → {correct_status}")
                             
-                            # Bildirim
                             icon = "🟢" if is_winner else ("⚪️" if is_void else "🔴")
                             msg = (
                                 f"🔄 <b>DÜZELTME: KUPON GÜNCELLENDİ!</b>\n\n"
@@ -621,11 +653,18 @@ async def revalidate_resolved_bets():
                                 f"💰 <b>Kâr/Zarar:</b> {'+' if is_winner else ''}{new_profit:.2f} BB"
                             )
                             send_telegram_message(msg)
+                        
+                        # Her durumda cache güncelle
+                        reval_cache[db_id] = now
                 
                 except Exception as inner_e:
-                    logging.error(f"Revalidation error for {match_id}: {inner_e}")
+                    logging.error(f"Revalidation inner error for {match_id}: {inner_e}")
                     continue
             
-        logging.info(f"✅ REVALIDATION TAMAMLANDI: {corrected} düzeltildi, {reverted} PENDING'e geri alındı.")
+        # Cache'i kaydet
+        with open(REVALIDATION_CACHE_FILE, 'w') as f:
+            json.dump(reval_cache, f)
+
+        logging.info(f"✅ REVALIDATION TAMAMLANDI: {corrected} düzeltildi, {reverted} PENDING geri alındı.")
     except Exception as e:
         logging.error(f"Revalidation error: {e}")
