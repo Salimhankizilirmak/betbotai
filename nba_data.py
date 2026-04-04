@@ -125,24 +125,44 @@ def get_nba_top_players(team_id):
 def get_nba_player_game_stat(player_name, date_str, stat_type):
     """
     Belirli bir tarihteki maçta oyuncunun istatistiğini getirir.
-    date_str: '2026-03-27T03:00:00Z' formatında (Odds API commence_time)
+    date_str: '2026-03-27T03:00:00Z' veya '2026-03-27 03:00:00' formatında
     stat_type: 'PTS', 'REB', 'AST'
     """
     from nba_api.stats.static import players as nba_players
     from nba_api.stats.endpoints import playergamelog
     
     try:
+        # Player name search - exact first, then fuzzy fallback
         search = nba_players.find_players_by_full_name(player_name)
         if not search:
-            return None
+            # Fuzzy: soyadı veya adında geçen oyuncuları bul
+            last_name = player_name.split()[-1]
+            first_name = player_name.split()[0]
+            all_players = nba_players.get_active_players()
+            search = [p for p in all_players if 
+                      last_name.lower() in p['full_name'].lower() and 
+                      first_name.lower() in p['full_name'].lower()]
+            if search:
+                logging.info(f"Fuzzy match found: '{player_name}' -> '{search[0]['full_name']}'")
+            else:
+                logging.warning(f"Player NOT FOUND in NBA API: '{player_name}'")
+                return None
+        
         player_id = search[0]['id']
+        found_name = search[0]['full_name']
         
-        # Tarihi 'YYYY-MM-DD' formatına çevir
-        target_date = date_str.split('T')[0]
+        # Tarihi 'YYYY-MM-DD' formatına güvenli biçimde çevir
+        # PostgreSQL datetime -> "2026-04-03 22:30:00" (boşluk) veya "2026-04-03T22:30:00Z" (T)
+        date_str_clean = str(date_str).replace('T', ' ').split('.')[0].split('+')[0].strip()
+        target_date = date_str_clean.split(' ')[0]  # Her zaman YYYY-MM-DD alır
         
-        logging.info(f"Resolving NBA Prop: {player_name} on {target_date} for {stat_type}")
+        logging.info(f"Resolving NBA Prop: '{found_name}' (searched: '{player_name}') on {target_date} for {stat_type}")
         
         log = playergamelog.PlayerGameLog(player_id=player_id, season='2025-26', timeout=10).get_data_frames()[0]
+        
+        if log.empty:
+            logging.warning(f"Empty game log for {found_name}")
+            return None
         
         # Tarihe göre filtrele
         log['GAME_DATE'] = pd.to_datetime(log['GAME_DATE'])
@@ -155,9 +175,10 @@ def get_nba_player_game_stat(player_name, date_str, stat_type):
             match = log[log['GAME_DATE'].dt.strftime('%Y-%m-%d') == d]
             if not match.empty:
                 actual_val = match.iloc[0].get(stat_type, 0)
-                logging.info(f"Found NBA Stat: {player_name} {stat_type} = {actual_val}")
+                logging.info(f"✅ Found NBA Stat: {found_name} {stat_type} = {actual_val} (date: {d})")
                 return float(actual_val)
         
+        logging.warning(f"No game found for {found_name} around {target_date}. Last 3 games: {log['GAME_DATE'].head(3).dt.strftime('%Y-%m-%d').tolist()}")
         # DNP CHECK: Eğer oyuncu logda bulunamadıysa, takımının o gün maçı var mıydı?
         try:
             # Oyuncunun takımını bul (veya lig genelinden o günkü maçları bul)

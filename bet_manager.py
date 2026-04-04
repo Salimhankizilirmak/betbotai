@@ -477,7 +477,116 @@ def get_pending_sports():
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT DISTINCT sport_key FROM bets WHERE status = 'PENDING'")
-            return [row[0] for row in cursor.fetchall()]
+            return [row['sport_key'] for row in cursor.fetchall()]
     except Exception as e:
         logging.error(f"Pending sports fetch error: {e}")
         return []
+
+def revalidate_resolved_bets():
+    """
+    Son 2 günde yanlış sonuçlanan PROP bahislerini NBA API'den tekrar doğrular ve düzeltir.
+    - Gelecek maçlar PENDING'e geri alınır
+    - Yanlış WON/LOST tespitler düzeltilir
+    - Mevcut yapıyı bozmaz, yalnızca kayıtları günceller
+    """
+    import nba_data
+    from datetime import datetime, timezone
+    
+    logging.info("🔍 REVALIDATION: Çözümlenen prop bahisleri tekrar doğrulanıyor...")
+    corrected = 0
+    reverted = 0
+    
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            # Son 2 günlük çözümlenmiş PROP bahislerini al
+            cursor.execute("""
+                SELECT match_id, bet_target, odds_value, bet_amount, home_team, away_team, 
+                       status, profit, commence_time
+                FROM bets 
+                WHERE status IN ('WON', 'LOST')
+                  AND match_id LIKE 'PROP_%%'
+                  AND commence_time >= NOW() - INTERVAL '3 days'
+            """)
+            resolved_props = cursor.fetchall()
+            logging.info(f"REVALIDATION: {len(resolved_props)} çözümlenmiş prop bahisi kontrol ediliyor...")
+            
+            for bet in resolved_props:
+                match_id = bet['match_id']
+                target_str = str(bet['bet_target'])
+                commence_time = bet['commence_time']
+                current_status = bet['status']
+                
+                try:
+                    # 1. Gelecek maç kontrolü: Bu maç hiç oynandı mı?
+                    if commence_time:
+                        if hasattr(commence_time, 'tzinfo'):
+                            game_time = commence_time if commence_time.tzinfo else commence_time.replace(tzinfo=timezone.utc)
+                        else:
+                            game_time = datetime.fromisoformat(str(commence_time).replace('Z', '+00:00'))
+                        
+                        if game_time > datetime.now(timezone.utc):
+                            # Bu maç henüz oynamadı, PENDING'e geri al
+                            with db_lock:
+                                cursor.execute("UPDATE bets SET status = 'PENDING', profit = 0.0 WHERE match_id = %s", (match_id,))
+                                conn.commit()
+                            reverted += 1
+                            logging.warning(f"REVALIDATION REVERTED: Oynamayan maç PENDING'e döndürüldü: {match_id}")
+                            continue
+                    
+                    # 2. bet_target parse et
+                    match_p = re.search(r'(.*?)\s*\|\s*(\w+)\s+(OVER|UNDER)\s+([\d.]+)', target_str)
+                    if not match_p:
+                        continue
+                    
+                    prop_player = match_p.group(1).strip()
+                    mkey_short = match_p.group(2).strip().upper()
+                    direction = match_p.group(3).strip().upper()
+                    target_line = float(match_p.group(4))
+                    stat_map = {"PTS": "PTS", "REB": "REB", "AST": "AST", "POINTS": "PTS", "REBOUNDS": "REB", "ASSISTS": "AST"}
+                    prop_stat = stat_map.get(mkey_short, "PTS")
+                    
+                    # 3. Gerçek istatistiği çek
+                    actual_val = nba_data.get_nba_player_game_stat(prop_player, str(commence_time), prop_stat)
+                    
+                    if actual_val is None or actual_val == -999.0:
+                        continue  # Veri yok, geç
+                    
+                    # 4. Doğru sonucu hesapla
+                    correct_winner = actual_val > target_line if direction == "OVER" else actual_val < target_line
+                    correct_status = 'WON' if correct_winner else 'LOST'
+                    
+                    if current_status != correct_status:
+                        odds = bet['odds_value']
+                        amount = bet.get('bet_amount', 100.0)
+                        safe_odds = odds if odds and odds > 1.0 else 1.90
+                        new_profit = (amount * safe_odds) - amount if correct_winner else -amount
+                        
+                        with db_lock:
+                            cursor.execute(
+                                "UPDATE bets SET status = %s, profit = %s WHERE match_id = %s",
+                                (correct_status, new_profit, match_id)
+                            )
+                            conn.commit()
+                        corrected += 1
+                        logging.info(f"✅ REVALIDATION FIXED: {prop_player} {prop_stat} Actual={actual_val} vs Line={target_line} | {current_status} → {correct_status} ({'+' if correct_winner else ''}{new_profit:.2f} BB)")
+                        
+                        # Telegram bildirimi: Hata düzeltildi
+                        icon = "🟢" if correct_winner else "🔴"
+                        msg = (
+                            f"🔄 <b>DÜZELTME: KUPON GÜNCELLENDI!</b>\n\n"
+                            f"🏀 <b>Hedef:</b> {target_str}\n"
+                            f"📊 <b>Gerçek:</b> {prop_stat} = {actual_val} (Hat: {target_line})\n"
+                            f"{icon} <b>Yeni Durum:</b> {correct_status}\n"
+                            f"💰 <b>Kâr/Zarar:</b> {'+' if correct_winner else ''}{new_profit:.2f} BB"
+                        )
+                        send_telegram_message(msg)
+                        
+                except Exception as inner_e:
+                    logging.error(f"Revalidation inner error for {match_id}: {inner_e}")
+                    continue
+            
+        logging.info(f"✅ REVALIDATION TAMAMLANDI: {corrected} düzeltildi, {reverted} PENDING'e geri alındı.")
+    except Exception as e:
+        logging.error(f"Revalidation error: {e}")
+

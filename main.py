@@ -265,6 +265,10 @@ async def emergency_resolve_stuck_bets():
             for prop in pending_props:
                 await asyncio.to_thread(resolve_bet_status, prop['match_id'], "STARTUP_RECOVERY")
                 
+        # 3. Yanlış sonuçlanan eski bahisleri düzelt (Yapıyı bozmaz, sadece günceller)
+        logging.info("🔍 REVALIDATION başlatılıyor: Yanlış sonuçlanan bahisler kontrol ediliyor...")
+        await asyncio.to_thread(bet_manager.revalidate_resolved_bets)
+                
     except Exception as e:
         logging.error(f"Error in emergency_resolve_stuck_bets: {e}")
 
