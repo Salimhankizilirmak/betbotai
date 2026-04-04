@@ -227,7 +227,7 @@ async def check_and_resolve_all_pending_bets():
                             if h_score > a_score: winner = "HOME_WIN"
                             elif a_score > h_score: winner = "AWAY_WIN"
                             
-                            # 1. Ana Maç Bahsini Çöz (H2H, Total vb.)
+                            # 1. Ana Maç Bahsini Çöz (PENDING + son 3 günlük WON/LOST)
                             await asyncio.to_thread(resolve_bet_status, event['id'], winner, h_score, a_score)
                             
                             # 2. Varsa Bu Maçın Player Prop'larını Kontrol Et
@@ -236,7 +236,6 @@ async def check_and_resolve_all_pending_bets():
                                             if b['status'] == 'PENDING' and b['match_id'].startswith(f"PROP_{event['id']}")]
                             
                             for prop in pending_props:
-                                # Bet_manager.resolve_bet_status artık PROP_ match_id'lerini otomatik tanıyıp çözüyor
                                 await asyncio.to_thread(resolve_bet_status, prop['match_id'], "N/A")
     except Exception as e:
         logging.error(f"Error in check_and_resolve_all_pending_bets: {e}")
