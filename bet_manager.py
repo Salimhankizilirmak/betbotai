@@ -526,7 +526,8 @@ def revalidate_resolved_bets():
                 FROM bets 
                 WHERE status IN ('WON', 'LOST')
                   AND match_id LIKE 'PROP_%%'
-                  AND commence_time >= NOW() - INTERVAL '3 days'
+                  AND commence_time IS NOT NULL 
+                  AND CAST(commence_time AS TIMESTAMP) >= NOW() - INTERVAL '3 days'
             """)
             resolved_props = cursor.fetchall()
             logging.info(f"REVALIDATION: {len(resolved_props)} çözümlenmiş prop bahisi kontrol ediliyor...")
