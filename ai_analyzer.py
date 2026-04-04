@@ -42,9 +42,12 @@ groq_client = OpenAI(
 # Modeller
 AI_MODELS = [
     'gemini-2.5-flash',
-    'gemini-3.1-flash-live-preview'
 ]
 OPENAI_MODEL = "gpt-4o-mini"
+
+# Gemini kota koruma: son çağrı zamanını takip et
+_last_gemini_call_time = 0.0
+GEMINI_MIN_INTERVAL = 60  # Gemini çağrıları arası minimum 60 saniye
 
 # Cache Ayarları
 CACHE_FILE = os.path.join("data", "ai_cache.json")
@@ -326,29 +329,38 @@ async def calculate_risk(match_data):
         )
         
         gemini_analysis = ""
+        
+        # Gemini kota koruma: son çağrıdan bu yana yeterli süre geçti mi?
+        global _last_gemini_call_time
+        time_since_last = time.time() - _last_gemini_call_time
+        if time_since_last < GEMINI_MIN_INTERVAL:
+            wait_secs = GEMINI_MIN_INTERVAL - time_since_last
+            logging.info(f"Gemini kota koruma: {wait_secs:.0f}s bekleniyor...")
+            await asyncio.sleep(wait_secs)
+        
         for model_name in AI_MODELS:
             current_key = gemini_api_manager.get_current_key()
             if not current_key:
                 break
-                
-            client = genai.Client(api_key=current_key)
             
-            # Rotation support handled in retry_with_backoff for Gemini? No, let's just do standard request.
-            # If 429 occurs, retry_with_backoff will sleep, but we should also rotate the key if it fails.
-            max_gemini_retries = gemini_api_manager.get_max_retries() * 2
-            for attempt in range(max_gemini_retries):
+            # Max 2 deneme (çok fazla retry kota bitirir)
+            for attempt in range(2):
                 cur_key = gemini_api_manager.get_current_key()
                 client = genai.Client(api_key=cur_key)
                 try:
                     resp = await client.aio.models.generate_content(model=model_name, contents=gemini_initial_prompt)
                     if resp:
                         gemini_analysis = resp.text
+                        _last_gemini_call_time = time.time()
                         break
                 except Exception as e:
                     if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
                         logging.warning(f"Kota doldu (429), API Key değiştiriliyor... (Deneme {attempt+1})")
                         gemini_api_manager.rotate_key()
-                        await asyncio.sleep(2)
+                        await asyncio.sleep(30)  # 429 sonrası 30 saniye bekle
+                    elif "404" in str(e):
+                        logging.warning(f"Model bulunamadı (404): {model_name}. Fallback'e geçiliyor.")
+                        break
                     else:
                         logging.error(f"Gemini API hatası: {e}")
                         break
@@ -383,21 +395,24 @@ async def calculate_risk(match_data):
             current_key = gemini_api_manager.get_current_key()
             if not current_key:
                 break
-                
-            max_gemini_retries = gemini_api_manager.get_max_retries() * 2
-            for attempt in range(max_gemini_retries):
+            
+            # Final karar için de sadece 2 deneme
+            for attempt in range(2):
                 cur_key = gemini_api_manager.get_current_key()
                 client = genai.Client(api_key=cur_key)
                 try:
                     resp = await client.aio.models.generate_content(model=model_name, contents=final_prompt)
                     if resp:
                         final_result_text = resp.text
+                        _last_gemini_call_time = time.time()
                         break
                 except Exception as e:
                     if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
                         logging.warning(f"Kota doldu (429), API Key değiştiriliyor... (Deneme {attempt+1})")
                         gemini_api_manager.rotate_key()
-                        await asyncio.sleep(2)
+                        await asyncio.sleep(30)
+                    elif "404" in str(e):
+                        break
                     else:
                         logging.error(f"Gemini API hatası: {e}")
                         break
