@@ -328,17 +328,17 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
             
             # 0. Player Props Kontrolü
             if str(match_id).startswith("PROP_"):
-                # Örn: PROP_12345_LeBron James_PTS
+                # Örn: PROP_12345_LeBron James_player_points
                 parts = str(match_id).split("_")
                 if len(parts) >= 4:
                     prop_player = parts[2]
-                    prop_stat = parts[3]
+                    # market: 'player_points', 'player_rebounds', 'player_assists'
+                    # Ama nba_api 'PTS', 'REB', 'AST' kullanıyor.
+                    mkey = "_".join(parts[3:]) 
+                    stat_map = {"player_points": "PTS", "player_rebounds": "REB", "player_assists": "AST"}
+                    prop_stat = stat_map.get(mkey, "PTS")
                     
-                    # NBA API üzerinden gerçek veriyi çekmeye çalış (NBA ise)
                     import nba_data
-                    # commence_time'ı DB'den bahis yapılan maçtan alabiliriz ama resolve_bet_status'a geçilmiyor.
-                    # Bekleyen bahis bilgilerini zaten yukarda aldık (prediction, odds, amount, home, away)
-                    # Ama tarih eksik. Tarihi DB'den çekelim.
                     with get_db_connection() as conn_local:
                         cursor_local = conn_local.cursor()
                         cursor_local.execute("SELECT commence_time FROM bets WHERE match_id = %s", (match_id,))
@@ -348,16 +348,23 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
                     if commence_time:
                         actual_val = nba_data.get_nba_player_game_stat(prop_player, commence_time, prop_stat)
                         if actual_val is not None:
-                            # Tahmini kontrol et (Örn: "LeBron James | PTS OVER 25.5")
-                            # bet_target (prediction) içinden limiti çek
                             import re
-                            limit_match = re.search(r'OVER\s+([\d.]+)', prediction)
-                            if limit_match:
-                                target_line = float(limit_match.group(1))
-                                is_winner = actual_val > target_line
-                                h_score, a_score = actual_val, target_line # Dashboard'da görünsün diye
+                            # OVER/UNDER ve limiti çek
+                            ov_match = re.search(r'OVER\s+([\d.]+)', prediction)
+                            un_match = re.search(r'UNDER\s+([\d.]+)', prediction)
+                            
+                            try:
+                                if ov_match:
+                                    target_line = float(ov_match.group(1))
+                                    is_winner = actual_val > target_line
+                                elif un_match:
+                                    target_line = float(un_match.group(1))
+                                    is_winner = actual_val < target_line
+                                
+                                h_score, a_score = actual_val, target_line # Stats for display
                                 logging.info(f"PROP RESOLVED: {prop_player} {prop_stat} Actual={actual_val} vs Line={target_line} | Win={is_winner}")
-                            else:
+                            except:
+                                logging.error(f"Prop parsing error for {prediction}")
                                 return False
                         else:
                             logging.info(f"Prop {match_id} için henüz boxscore verisi yok. Atlanıyor.")
