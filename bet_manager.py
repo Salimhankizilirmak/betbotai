@@ -642,6 +642,11 @@ async def revalidate_resolved_bets():
                                         if winner_code == "HOME_WIN": correct_winner_flag = fuzzy_match(t_team, h_team)
                                         elif winner_code == "AWAY_WIN": correct_winner_flag = fuzzy_match(t_team, a_team)
                                         else: correct_winner_flag = False
+                                    elif fuzzy_match(prediction, h_team) or fuzzy_match(prediction, a_team):
+                                        # Prediction is a team name, check if they won
+                                        if winner_code == "HOME_WIN": correct_winner_flag = fuzzy_match(prediction, h_team)
+                                        elif winner_code == "AWAY_WIN": correct_winner_flag = fuzzy_match(prediction, a_team)
+                                        else: correct_winner_flag = False
                                     else:
                                         # Totals check
                                         total = hs + ascore
