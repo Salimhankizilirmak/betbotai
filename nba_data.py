@@ -1,4 +1,4 @@
-from nba_api.stats.endpoints import leaguestandingsv3, teamplayerdashboard, leaguegamefinder
+from nba_api.stats.endpoints import leaguestandingsv3, teamplayerdashboard, leaguegamefinder, scoreboardv2
 from nba_api.stats.static import teams as nba_teams
 import logging
 import threading
@@ -229,3 +229,64 @@ def get_nba_player_game_stat(player_name, date_str, stat_type):
     except Exception as e:
         logging.error(f"Error resolving NBA player stat: {e}")
         return None
+def get_nba_match_score(home_team, away_team, date_str):
+    """
+    NBA API üzerinden maç skorunu getirir (Odds API yedeği olarak).
+    """
+    try:
+        # Tarihi ayıkla
+        date_str_clean = str(date_str).replace('T', ' ').split('.')[0].split('+')[0].strip()
+        target_date = date_str_clean.split(' ')[0]
+        
+        logging.info(f"🏀 NBA FALLBACK: {home_team} vs {away_team} maçı {target_date} tarihi için aranıyor...")
+        
+        # O günkü tüm maçları çek
+        sb = scoreboardv2.ScoreboardV2(game_date=target_date, timeout=15).get_data_frames()[1] # LineScore
+        
+        if sb.empty:
+            logging.info(f"NBA FALLBACK: {target_date} tarihinde maç bulunamadı.")
+            return None
+            
+        # Maçları GAME_ID bazlı grupla ve takımları eşleştir
+        # LineScore'da her satır bir takımdır. 2 satır bir maç eder.
+        game_ids = sb['GAME_ID'].unique()
+        
+        for g_id in game_ids:
+            game_data = sb[sb['GAME_ID'] == g_id]
+            if len(game_data) < 2: continue
+            
+            teams = game_data['TEAM_NAME'].unique().tolist()
+            # Fuzzy match teams
+            h_found = any(dfm(home_team, t) for t in teams)
+            a_found = any(dfm(away_team, t) for t in teams)
+            
+            if h_found and a_found:
+                # Eşleşen maçı bulduk
+                h_row = next(row for _, row in game_data.iterrows() if dfm(home_team, row['TEAM_NAME']))
+                a_row = next(row for _, row in game_data.iterrows() if dfm(away_team, row['TEAM_NAME']))
+                
+                h_score = int(h_row['PTS'])
+                a_score = int(a_row['PTS'])
+                
+                # scoreboardv2'de status kontrolü (Game Header DF'den bakılabilir ama genelde LineScore varsa biterse skor doludur)
+                logging.info(f"✅ NBA FALLBACK SUCCESS: {home_team} {h_score} - {a_score} {away_team}")
+                return {
+                    "home_score": h_score,
+                    "away_score": a_score,
+                    "completed": True # Scoreboardv2'de skorlar varsa genelde bitmiştir
+                }
+                
+        return None
+    except Exception as e:
+        logging.error(f"Error in NBA match score fallback: {e}")
+        return None
+
+def dfm(n1, n2, threshold=0.7):
+    """Helper for internal fuzzy matching without importing bet_manager."""
+    from difflib import SequenceMatcher
+    if not n1 or not n2: return False
+    n1, n2 = str(n1).lower().strip(), str(n2).lower().strip()
+    if n1 in n2 or n2 in n1: return True
+    w1 = set(n1.split()); w2 = set(n2.split())
+    if w1.intersection(w2) and any(len(w) > 3 for w in w1.intersection(w2)): return True
+    return SequenceMatcher(None, n1, n2).ratio() >= threshold
