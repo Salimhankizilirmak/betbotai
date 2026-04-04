@@ -177,10 +177,20 @@ def get_nba_player_game_stat(player_name, date_str, stat_type):
         
         logging.info(f"Resolving NBA Prop: '{found_name}' (searched: '{player_name}') on {target_date} for {stat_type}")
         
-        log = playergamelog.PlayerGameLog(player_id=player_id, season='2025-26', timeout=10).get_data_frames()[0]
+        log = None
+        for attempt in range(1, 4):  # 3 attempts
+            try:
+                log = playergamelog.PlayerGameLog(player_id=player_id, season='2025-26', timeout=30).get_data_frames()[0]
+                if not log.empty:
+                    break
+            except Exception as e:
+                logging.warning(f"NBA API Attempt {attempt} failed: {e}")
+                if attempt < 3:
+                    import time
+                    time.sleep(2)
         
-        if log.empty:
-            logging.warning(f"Empty game log for {found_name}")
+        if log is None or log.empty:
+            logging.warning(f"Empty or unreachable game log for {found_name} after 3 attempts")
             return None
         
         # Tarihe göre filtrele
