@@ -351,7 +351,7 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
                         cursor_local = conn_local.cursor()
                         cursor_local.execute("SELECT commence_time FROM bets WHERE match_id = %s", (match_id,))
                         row = cursor_local.fetchone()
-                        commence_time = row[0] if row else None # Use index since row is a tuple
+                        commence_time = row['commence_time'] if row else None
                     
                     if commence_time:
                         actual_val = nba_data.get_nba_player_game_stat(prop_player, str(commence_time), prop_stat)
@@ -426,11 +426,12 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
                 logging.warning(f"Bet {match_id} could not be resolved: Stats/Winner missing. Predicted={prediction}, winner={winner}, h_score={h_score}")
                 return False
             
-            # Eğer API oran çekememişse (0.00) iflas etmemek için varsayılan 1.90 oran verelim
-            safe_odds = odds if odds > 1.0 else 1.90
-            
-            status = 'WON' if is_winner else 'LOST'
-            profit = (amount * safe_odds) - amount if is_winner else -amount
+            # PROP bahisler için status/profit zaten yukarıda set edildi
+            if not str(match_id).startswith("PROP_"):
+                # Eğer API oran çekememişse (0.00) iflas etmemek için varsayılan 1.90 oran verelim
+                safe_odds = odds if odds > 1.0 else 1.90
+                status = 'WON' if is_winner else 'LOST'
+                profit = (amount * safe_odds) - amount if is_winner else -amount
             
             with db_lock:
                 cursor.execute("UPDATE bets SET status = %s, profit = %s WHERE match_id = %s", (status, profit, match_id))
