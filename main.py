@@ -227,23 +227,37 @@ async def check_and_resolve_all_pending_bets():
                             if h_score > a_score: winner = "HOME_WIN"
                             elif a_score > h_score: winner = "AWAY_WIN"
                             
-                            # 1. Ana Maç Bahsini Çöz
+                            # 1. Ana Maç Bahsini Çöz (H2H, Total vb.)
                             await asyncio.to_thread(resolve_bet_status, event['id'], winner, h_score, a_score)
                             
-                            # 2. Varsa Bu Maçın Player Prop'larını Kontrol Et (match_id PROP_ ile başlıyorsa)
-                            # Not: Prop çözümü için boxscore gerekecektir, burada sadece match_id'leri bulup temizliyoruz veya logluyoruz.
+                            # 2. Varsa Bu Maçın Player Prop'larını Kontrol Et
                             import bet_manager
                             pending_props = [b for b in await asyncio.to_thread(bet_manager.get_bet_history) 
                                             if b['status'] == 'PENDING' and b['match_id'].startswith(f"PROP_{event['id']}")]
                             
                             for prop in pending_props:
-                                # TODO: Gerçek Oyuncu İstatistiği Çözümleyici Gerekli
-                                logging.info(f"Maç Bitti, Prop Beklemede: {prop['match_id']} | Match Result: {winner}")
-                                # Eğer match win/loss ise prop'u da dolaylı çözebiliriz veya manuel bırakırız.
-                                # Ama en azından match_id eşleşmesini logladık.
-                                await asyncio.to_thread(resolve_bet_status, prop['match_id'], winner, h_score, a_score)
+                                # Bet_manager.resolve_bet_status artık PROP_ match_id'lerini otomatik tanıyıp çözüyor
+                                await asyncio.to_thread(resolve_bet_status, prop['match_id'], "N/A")
     except Exception as e:
         logging.error(f"Error in check_and_resolve_all_pending_bets: {e}")
+
+async def emergency_resolve_stuck_bets():
+    """Startup'ta bekleyen tüm bahisleri (özellikle dünkü prop'ları) zorla çözmeye çalışır."""
+    logging.info("🚀 EMERGENCY RESOLVER: Bekleyen bahisler taranıyor...")
+    try:
+        import bet_manager
+        pending = [b for b in await asyncio.to_thread(bet_manager.get_bet_history) if b['status'] == 'PENDING']
+        for bet in pending:
+            mid = bet['match_id']
+            if mid.startswith("PROP_"):
+                # Prop'ları resolve_bet_status ile çözmeyi dene
+                await asyncio.to_thread(resolve_bet_status, mid, "STARTUP_RECOVERY")
+            else:
+                # Standart bahisler için check_and_resolve_all_pending_bets zaten döngüde çalışacak
+                # Ama burada da spor bazlı bir tetikleme yapabiliriz
+                pass
+    except Exception as e:
+        logging.error(f"Error in emergency_resolve_stuck_bets: {e}")
 
 async def get_safe_mode_multiplier():
     """Son performansa göre bahis miktar çarpanı döner (Bot zarardaysa miktar düşer)."""
@@ -496,6 +510,10 @@ async def startup():
     asyncio.create_task(check_and_resolve_all_pending_bets())
     
     asyncio.create_task(background_resolver())
+    # 1. Startup'ta beklemede kalan dünkü/eski bahisleri çöz
+    asyncio.create_task(emergency_resolve_stuck_bets())
+    
+    # 2. Döngüleri Başlat
     asyncio.create_task(background_analyzer())
     asyncio.create_task(background_props_analyzer())
     logging.info("BetBot Server Live on Port 8005")
