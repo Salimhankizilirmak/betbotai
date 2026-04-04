@@ -236,45 +236,44 @@ def get_nba_match_score(home_team, away_team, date_str):
     try:
         # Tarihi ayıkla
         date_str_clean = str(date_str).replace('T', ' ').split('.')[0].split('+')[0].strip()
-        target_date = date_str_clean.split(' ')[0]
+        dt_obj = pd.to_datetime(date_str_clean)
         
-        logging.info(f"🏀 NBA FALLBACK: {home_team} vs {away_team} maçı {target_date} tarihi için aranıyor...")
+        # Check both the target date and the previous day (for US vs UTC mismatch)
+        dates_to_check = [(dt_obj + pd.Timedelta(days=d)).strftime('%Y-%m-%d') for d in [0, -1]]
         
-        # O günkü tüm maçları çek
-        sb = scoreboardv2.ScoreboardV2(game_date=target_date, timeout=15).get_data_frames()[1] # LineScore
-        
-        if sb.empty:
-            logging.info(f"NBA FALLBACK: {target_date} tarihinde maç bulunamadı.")
-            return None
+        for target_date in dates_to_check:
+            logging.info(f"🏀 NBA FALLBACK: {home_team} vs {away_team} maçı {target_date} tarihi için aranıyor...")
+            # O günkü tüm maçları çek
+            sb = scoreboardv2.ScoreboardV2(game_date=target_date, timeout=15).get_data_frames()[1] # LineScore
             
-        # Maçları GAME_ID bazlı grupla ve takımları eşleştir
-        # LineScore'da her satır bir takımdır. 2 satır bir maç eder.
-        game_ids = sb['GAME_ID'].unique()
-        
-        for g_id in game_ids:
-            game_data = sb[sb['GAME_ID'] == g_id]
-            if len(game_data) < 2: continue
-            
-            teams = game_data['TEAM_NAME'].unique().tolist()
-            # Fuzzy match teams
-            h_found = any(dfm(home_team, t) for t in teams)
-            a_found = any(dfm(away_team, t) for t in teams)
-            
-            if h_found and a_found:
-                # Eşleşen maçı bulduk
-                h_row = next(row for _, row in game_data.iterrows() if dfm(home_team, row['TEAM_NAME']))
-                a_row = next(row for _, row in game_data.iterrows() if dfm(away_team, row['TEAM_NAME']))
+            if sb.empty:
+                continue
                 
-                h_score = int(h_row['PTS'])
-                a_score = int(a_row['PTS'])
+            # Maçları GAME_ID bazlı grupla ve takımları eşleştir
+            game_ids = sb['GAME_ID'].unique()
+            
+            for g_id in game_ids:
+                game_data = sb[sb['GAME_ID'] == g_id]
+                if len(game_data) < 2: continue
                 
-                # scoreboardv2'de status kontrolü (Game Header DF'den bakılabilir ama genelde LineScore varsa biterse skor doludur)
-                logging.info(f"✅ NBA FALLBACK SUCCESS: {home_team} {h_score} - {a_score} {away_team}")
-                return {
-                    "home_score": h_score,
-                    "away_score": a_score,
-                    "completed": True # Scoreboardv2'de skorlar varsa genelde bitmiştir
-                }
+                teams = game_data['TEAM_NAME'].unique().tolist()
+                # Fuzzy match teams
+                h_found = any(dfm(home_team, t) for t in teams)
+                a_found = any(dfm(away_team, t) for t in teams)
+                
+                if h_found and a_found:
+                    h_row = next(row for _, row in game_data.iterrows() if dfm(home_team, row['TEAM_NAME']))
+                    a_row = next(row for _, row in game_data.iterrows() if dfm(away_team, row['TEAM_NAME']))
+                    
+                    h_score = int(h_row['PTS'])
+                    a_score = int(a_row['PTS'])
+                    
+                    logging.info(f"✅ NBA FALLBACK SUCCESS: {home_team} {h_score} - {a_score} {away_team} (Date: {target_date})")
+                    return {
+                        "home_score": h_score,
+                        "away_score": a_score,
+                        "completed": True
+                    }
                 
         return None
     except Exception as e:
