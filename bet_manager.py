@@ -575,9 +575,13 @@ async def revalidate_resolved_bets():
                     # 4. NORMAL MAÇ BAHSİ (H2H / TOTALS)
                     else:
                         if sport not in score_cache:
-                            score_cache[sport] = await get_scores(sport)
+                            try:
+                                score_cache[sport] = await get_scores(sport)
+                            except Exception as score_err:
+                                logging.warning(f"get_scores failed for {sport}: {score_err}")
+                                score_cache[sport] = None
                         
-                        scores = score_cache[sport] or []
+                        scores = score_cache.get(sport) or []
                         match_score = next((s for s in scores if s['id'] == match_id), None)
                         
                         fallback_score = None
