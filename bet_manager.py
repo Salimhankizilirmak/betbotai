@@ -315,11 +315,20 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT bet_target, odds_value, bet_amount, home_team, away_team FROM bets WHERE match_id = %s AND status = 'PENDING'", (match_id,))
+            cursor.execute("SELECT bet_target, odds_value, bet_amount, home_team, away_team FROM bets WHERE match_id = %s AND status IN ('PENDING', 'WON', 'LOST')", (match_id,))
             bet = cursor.fetchone()
             
             if not bet:
                 return False
+            
+            # Only skip if it's already WON/LOST AND no override flag passed
+            current_status_row = None
+            try:
+                cursor.execute("SELECT status FROM bets WHERE match_id = %s", (match_id,))
+                sr = cursor.fetchone()
+                current_status_row = sr['status'] if sr else None
+            except:
+                pass
                 
             prediction = bet['bet_target']
             odds = bet['odds_value']
@@ -406,12 +415,11 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
                     logging.error(f"Prop parsing error: bet_target format invalid: {target_str}")
                     return False
             
-            # 1. Taraf Bahsi Kontrolü (HOME_WIN, AWAY_WIN, DRAW)
+            # 1. Taraf Bahsi Kontrolü - Standart (HOME_WIN, AWAY_WIN, DRAW kodu)
             elif prediction in ["HOME_WIN", "AWAY_WIN", "DRAW"]:
                 if prediction == winner:
                     is_winner = True
                 elif winner not in ["HOME_WIN", "AWAY_WIN", "DRAW"]:
-                    # Eğer winner dize olarak gelmişse (takım ismi) fuzzy match yap
                     target_team = home if prediction == "HOME_WIN" else away
                     if fuzzy_match(target_team, winner):
                         is_winner = True
@@ -420,26 +428,48 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
                 else:
                     logging.info(f"Prediction {prediction} did not match winner {winner}")
             
-            # 2. Alt/Üst Bahsi Kontrolü (OVER 2.5, UNDER 210.5 vb.)
+            # 2. H2H Taraf Bahsi - Takım İsmiyle ("Houston Rockets @ 1.50" format)
+            elif " @ " in str(prediction) and ("OVER" not in str(prediction).upper() and "UNDER" not in str(prediction).upper()):
+                target_team = str(prediction).split(" @ ")[0].strip()
+                logging.info(f"H2H Team Bet: Checking if '{target_team}' won (winner={winner}, home={home}, away={away})")
+                # winner olarak HOME_WIN/AWAY_WIN/DRAW veya takım ismi gelebilir
+                if winner == "HOME_WIN":
+                    is_winner = fuzzy_match(target_team, home)
+                elif winner == "AWAY_WIN":
+                    is_winner = fuzzy_match(target_team, away)
+                elif winner == "DRAW":
+                    is_winner = False  # Taraf bahsi beraberlikte kaybeder
+                else:
+                    # winner takım ismiyle geldi
+                    is_winner = fuzzy_match(target_team, winner)
+                logging.info(f"H2H Team '{target_team}' vs winner '{winner}': is_winner={is_winner}")
+            
+            # 3. Alt/Üst Bahsi Kontrolü (OVER 2.5, UNDER 2.5, Under 2.5 Gol vb.)
             elif h_score is not None and a_score is not None:
                 total_score = h_score + a_score
-                parts = prediction.split()
-                if len(parts) >= 2:
-                    direction = parts[0].upper() # OVER / UNDER
-                    try:
-                        point = float(parts[1])
-                        if direction == "OVER" and total_score > point:
-                            is_winner = True
-                        elif direction == "UNDER" and total_score < point:
+                pred_upper = str(prediction).upper()
+                # "Under 2.5 Gol" veya "OVER 2.5" formatlarını destekle
+                over_m = re.search(r'OVER\s+([\d.]+)', pred_upper)
+                under_m = re.search(r'UNDER\s+([\d.]+)', pred_upper)
+                try:
+                    if over_m:
+                        point = float(over_m.group(1))
+                        if total_score > point:
                             is_winner = True
                         else:
-                            logging.info(f"Total {total_score} did not satisfy {prediction}")
-                    except Exception as e:
-                        logging.error(f"Point parsing error for {prediction}: {e}")
-                else:
-                    logging.warning(f"Prediction format invalid for score check: {prediction}")
+                            logging.info(f"Total {total_score} < OVER {point} for '{prediction}'")
+                    elif under_m:
+                        point = float(under_m.group(1))
+                        if total_score < point:
+                            is_winner = True
+                        else:
+                            logging.info(f"Total {total_score} >= UNDER {point} for '{prediction}'")
+                    else:
+                        logging.warning(f"Totals format not recognized: '{prediction}'")
+                except Exception as e:
+                    logging.error(f"Totals parsing error for '{prediction}': {e}")
             else:
-                logging.warning(f"Bet {match_id} could not be resolved: Stats/Winner missing. Predicted={prediction}, winner={winner}, h_score={h_score}")
+                logging.warning(f"Bet {match_id}: Unresolvable - prediction='{prediction}', winner={winner}, h_score={h_score}")
                 return False
             
             # PROP bahisler için status/profit zaten yukarıda set edildi
