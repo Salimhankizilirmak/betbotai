@@ -354,6 +354,22 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
                         commence_time = row['commence_time'] if row else None
                     
                     if commence_time:
+                        from datetime import datetime, timezone, timedelta
+                        # Parse commence_time (str veya datetime olabilir)
+                        try:
+                            if hasattr(commence_time, 'tzinfo'):
+                                game_time = commence_time.replace(tzinfo=timezone.utc) if commence_time.tzinfo is None else commence_time
+                            else:
+                                game_time = datetime.fromisoformat(str(commence_time).replace('Z', '+00:00'))
+                        except:
+                            game_time = None
+                        
+                        # MAÇ HENUZ OYNAMADI KONTROLU: commence_time gelecekteyse atla!
+                        now_utc = datetime.now(timezone.utc)
+                        if game_time and game_time > now_utc:
+                            logging.info(f"Prop {match_id}: Maç henüz başlatmadı (Başlamasi: {game_time}). Atlanıyor.")
+                            return False
+                        
                         actual_val = nba_data.get_nba_player_game_stat(prop_player, str(commence_time), prop_stat)
                         
                         if actual_val is not None:
