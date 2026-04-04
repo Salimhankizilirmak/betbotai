@@ -587,16 +587,22 @@ async def revalidate_resolved_bets():
                         match_score = next((s for s in scores if s['id'] == match_id), None)
                         
                         fallback_score = None
-                        if not match_score:
+                        # Odds API skoru yoksa VEYA skor var ama maç henüz "completed" değilse fallback dene
+                        is_odds_completed = match_score.get('completed', False) if match_score else False
+                        
+                        if not is_odds_completed:
                             if sport == "basketball_nba":
+                                logging.info(f"🏀 NBA FALLBACK TRIGGER: {match_id} için Odds API skoru yetersiz, NBA Stats kontrol ediliyor...")
                                 fallback_score = nba_data.get_nba_match_score(bet['home_team'], bet['away_team'], commence_time)
                             elif "soccer" in sport:
                                 try:
                                     import soccer_data
+                                    logging.info(f"⚽ SOCCER FALLBACK TRIGGER: {match_id} için Yerel CSV kontrol ediliyor...")
                                     fallback_score = await soccer_data.get_soccer_match_score(bet['home_team'], bet['away_team'], commence_time, sport)
                                 except: pass
                         
-                        final_res = match_score if match_score else fallback_score
+                        # Fallback skoru varsa onu kullan, yoksa Odds API skorunu kullan (eğer varsa)
+                        final_res = fallback_score if fallback_score else match_score
                         
                         if final_res:
                             # Odds API 'completed' dönmeyebilir ama skorlar varsa kabul et
