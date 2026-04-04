@@ -571,55 +571,82 @@ async def revalidate_resolved_bets():
                                     correct_winner_flag = actual_val > line if direction == "OVER" else actual_val < line
                                     is_void = False
                                     actual_stat_text = f"{actual_val} (Hat: {line})"
-                            else:
-                                reval_cache[db_id] = now # Veri yoksa da bugün için kontrol edilmiş say
-                                continue
                     
                     # 4. NORMAL MAÇ BAHSİ (H2H / TOTALS)
                     else:
                         if sport not in score_cache:
                             score_cache[sport] = await get_scores(sport)
                         
-                        scores = score_cache[sport]
+                        scores = score_cache[sport] or []
                         match_score = next((s for s in scores if s['id'] == match_id), None)
                         
-                        if match_score and match_score.get('completed'):
-                            found_data = True
-                            h_team = match_score['home_team']
-                            a_team = match_score['away_team']
-                            s_list = match_score.get('scores', [])
-                            if len(s_list) == 2:
-                                s1 = int(s_list[0]['score'])
-                                s2 = int(s_list[1]['score'])
-                                n1 = s_list[0]['name']
-                                hs = s1 if n1 == h_team else s2
-                                ascore = s2 if n1 == h_team else s1
+                        fallback_score = None
+                        if not match_score:
+                            if sport == "basketball_nba":
+                                fallback_score = nba_data.get_nba_match_score(bet['home_team'], bet['away_team'], commence_time)
+                            elif "soccer" in sport:
+                                try:
+                                    import soccer_data
+                                    fallback_score = await soccer_data.get_soccer_match_score(bet['home_team'], bet['away_team'], commence_time, sport)
+                                except: pass
+                        
+                        final_res = match_score if match_score else fallback_score
+                        
+                        if final_res:
+                            # Odds API 'completed' dönmeyebilir ama skorlar varsa kabul et
+                            is_completed = final_res.get('completed', False) or ('scores' in final_res and len(final_res['scores']) == 2)
+                            
+                            if is_completed:
+                                found_data = True
+                                h_team = bet['home_team']
+                                a_team = bet['away_team']
                                 
-                                winner_code = "DRAW"
-                                if hs > ascore: winner_code = "HOME_WIN"
-                                elif ascore > hs: winner_code = "AWAY_WIN"
+                                # Veri yapısını normalize et
+                                if 'scores' in final_res: # Odds API
+                                    s_list = final_res['scores']
+                                    if len(s_list) == 2:
+                                        s1 = int(s_list[0]['score'])
+                                        s2 = int(s_list[1]['score'])
+                                        n1 = s_list[0]['name']
+                                        hs = s1 if fuzzy_match(n1, h_team) else s2
+                                        ascore = s2 if fuzzy_match(n1, h_team) else s1
+                                    else:
+                                        found_data = False
+                                else: # Fallback (NBA/Soccer)
+                                    hs = final_res['home_score']
+                                    ascore = final_res['away_score']
                                 
-                                prediction = target_str
-                                if prediction in ["HOME_WIN", "AWAY_WIN", "DRAW"]:
-                                    correct_winner_flag = (prediction == winner_code)
-                                elif " @ " in prediction:
-                                    t_team = prediction.split(" @ ")[0].strip()
-                                    if winner_code == "HOME_WIN": correct_winner_flag = fuzzy_match(t_team, h_team)
-                                    elif winner_code == "AWAY_WIN": correct_winner_flag = fuzzy_match(t_team, a_team)
-                                    else: correct_winner_flag = False
+                                if found_data:
+                                    # Winner Kodunu Belirle
+                                    winner_code = "DRAW"
+                                    if hs > ascore: winner_code = "HOME_WIN"
+                                    elif ascore > hs: winner_code = "AWAY_WIN"
+                                    
+                                    prediction = target_str
+                                    if prediction in ["HOME_WIN", "AWAY_WIN", "DRAW"]:
+                                        correct_winner_flag = (prediction == winner_code)
+                                    elif " @ " in prediction:
+                                        t_team = prediction.split(" @ ")[0].strip()
+                                        if winner_code == "HOME_WIN": correct_winner_flag = fuzzy_match(t_team, h_team)
+                                        elif winner_code == "AWAY_WIN": correct_winner_flag = fuzzy_match(t_team, a_team)
+                                        else: correct_winner_flag = False
+                                    else:
+                                        # Totals check
+                                        total = hs + ascore
+                                        over_m = re.search(r'OVER\s+([\d.]+)', prediction.upper())
+                                        under_m = re.search(r'UNDER\s+([\d.]+)', prediction.upper())
+                                        if over_m: correct_winner_flag = total > float(over_m.group(1))
+                                        elif under_m: correct_winner_flag = total < float(under_m.group(1))
+                                    
+                                    is_void = False
+                                    actual_stat_text = f"{hs}-{ascore}"
                                 else:
-                                    total = hs + ascore
-                                    over_m = re.search(r'OVER\s+([\d.]+)', prediction.upper())
-                                    under_m = re.search(r'UNDER\s+([\d.]+)', prediction.upper())
-                                    if over_m: correct_winner_flag = total > float(over_m.group(1))
-                                    elif under_m: correct_winner_flag = total < float(under_m.group(1))
-                                
-                                is_void = False
-                                actual_stat_text = f"{hs}-{ascore}"
+                                    found_data = False
                             else:
-                                found_data = False
+                                if not match_score: reval_cache[db_id] = now
+                                continue
                         else:
-                            reval_cache[db_id] = now # Tamamlanmamış maç, sonra bak
+                            if not match_score: reval_cache[db_id] = now
                             continue
 
                     # 5. Karşılaştır ve Düzelt
