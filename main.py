@@ -246,16 +246,25 @@ async def emergency_resolve_stuck_bets():
     logging.info("🚀 EMERGENCY RESOLVER: Bekleyen bahisler taranıyor...")
     try:
         import bet_manager
-        pending = [b for b in await asyncio.to_thread(bet_manager.get_bet_history) if b['status'] == 'PENDING']
-        for bet in pending:
-            mid = bet['match_id']
-            if mid.startswith("PROP_"):
-                # Prop'ları resolve_bet_status ile çözmeyi dene
-                await asyncio.to_thread(resolve_bet_status, mid, "STARTUP_RECOVERY")
-            else:
-                # Standart bahisler için check_and_resolve_all_pending_bets zaten döngüde çalışacak
-                # Ama burada da spor bazlı bir tetikleme yapabiliriz
-                pass
+        from oddsapi_client import get_scores
+        
+        # 1. Bekleyen tüm sporları bul ve skorları çek (H2H maçlar için)
+        pending_sports = await asyncio.to_thread(bet_manager.get_pending_sports)
+        logging.info(f"EMERGENCY: {len(pending_sports)} farklı spor dalında bekleyen bahis var: {pending_sports}")
+        
+        for sport in pending_sports:
+            logging.info(f"EMERGENCY: {sport} için son skorlar çekiliyor...")
+            await check_and_resolve_all_pending_bets(sport) # Belirli spor için çöz
+        
+        # 2. Hala PENDING kalan PROP bahislerini zorla çözmeyi dene (NBA API üzerinden)
+        pending_bets = await asyncio.to_thread(bet_manager.get_bet_history)
+        pending_props = [b for b in pending_bets if b['status'] == 'PENDING' and b['match_id'].startswith("PROP_")]
+        
+        if pending_props:
+            logging.info(f"EMERGENCY: {len(pending_props)} bekleyen PROP bahsi doğrudan NBA API ile çözülmeye çalışılıyor...")
+            for prop in pending_props:
+                await asyncio.to_thread(resolve_bet_status, prop['match_id'], "STARTUP_RECOVERY")
+                
     except Exception as e:
         logging.error(f"Error in emergency_resolve_stuck_bets: {e}")
 
@@ -325,14 +334,16 @@ def verify_and_place_bet(analysis, event):
     return True, "Master Süzgeçten Geçti"
 
 async def background_resolver():
-    logging.info("Background results resolver (independent) started.")
-    await asyncio.sleep(5)
+    """Arka planda bahisleri periyodik olarak sonuçlandırır."""
     while True:
         try:
+            # Her 10 dakikada bir kontrol et
+            logging.info("🔄 Arka plan bahis kontrolü başlatılıyor...")
             await check_and_resolve_all_pending_bets()
+            await asyncio.sleep(600) 
         except Exception as e:
-            logging.error(f"Resolver task error: {e}")
-        await asyncio.sleep(3600) # Saat başı (Kullanıcı Talebi)
+            logging.error(f"Error in background_resolver: {e}")
+            await asyncio.sleep(60)
 
 async def background_analyzer():
     logging.info("Background analyzer started.")

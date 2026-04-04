@@ -362,20 +362,22 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
                                     target_line = float(un_match.group(1))
                                     is_winner = actual_val < target_line
                                 else:
-                                    logging.error(f"Prop direction (OVER/UNDER) not found in {prediction}")
+                                    logging.error(f"Prop parsing error: OVER/UNDER not found in {prediction}")
                                     return False
                                 
                                 h_score, a_score = actual_val, target_line # Stats for display
                                 logging.info(f"PROP RESOLVED: {prop_player} {prop_stat} Actual={actual_val} vs Line={target_line} | Win={is_winner}")
                             except Exception as e:
-                                logging.error(f"Prop parsing error for {prediction}: {e}")
+                                logging.error(f"Prop processing error for {prediction}: {e}")
                                 return False
                         else:
-                            logging.info(f"Prop {match_id} için henüz boxscore verisi yok. Atlanıyor.")
+                            logging.info(f"Prop {match_id} için henüz boxscore verisi yok (NBA API). Atlanıyor.")
                             return False
                     else:
+                        logging.warning(f"Prop {match_id} için veritabanında commence_time bulunamadı.")
                         return False
                 else:
+                    logging.warning(f"Prop match_id formatı geçersiz: {match_id}")
                     return False
             
             # 1. Taraf Bahsi Kontrolü (HOME_WIN, AWAY_WIN, DRAW)
@@ -387,6 +389,10 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
                     target_team = home if prediction == "HOME_WIN" else away
                     if fuzzy_match(target_team, winner):
                         is_winner = True
+                    else:
+                        logging.info(f"Fuzzy match failed: {target_team} vs {winner}")
+                else:
+                    logging.info(f"Prediction {prediction} did not match winner {winner}")
             
             # 2. Alt/Üst Bahsi Kontrolü (OVER 2.5, UNDER 210.5 vb.)
             elif h_score is not None and a_score is not None:
@@ -400,8 +406,15 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
                             is_winner = True
                         elif direction == "UNDER" and total_score < point:
                             is_winner = True
-                    except:
-                        pass
+                        else:
+                            logging.info(f"Total {total_score} did not satisfy {prediction}")
+                    except Exception as e:
+                        logging.error(f"Point parsing error for {prediction}: {e}")
+                else:
+                    logging.warning(f"Prediction format invalid for score check: {prediction}")
+            else:
+                logging.warning(f"Bet {match_id} could not be resolved: Stats/Winner missing. Predicted={prediction}, winner={winner}, h_score={h_score}")
+                return False
             
             # Eğer API oran çekememişse (0.00) iflas etmemek için varsayılan 1.90 oran verelim
             safe_odds = odds if odds > 1.0 else 1.90
