@@ -321,7 +321,11 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
             if not bet:
                 return False
                 
-            prediction, odds, amount, home, away = bet
+            prediction = bet['bet_target']
+            odds = bet['odds_value']
+            amount = bet.get('bet_amount', 100.0)
+            home = bet['home_team']
+            away = bet['away_team']
             is_winner = False
             
             if str(match_id).startswith("PROP_"):
