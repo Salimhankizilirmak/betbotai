@@ -196,13 +196,14 @@ def get_nba_player_game_stat(player_name, date_str, stat_type):
         # Tarihe göre filtrele
         log['GAME_DATE'] = pd.to_datetime(log['GAME_DATE'])
         
-        # Check target date and yesterday only (NOT tomorrow - prevents future game matching)
+        # Check target date FIRST, then yesterday (fallback for late night starts)
         dt_obj = pd.to_datetime(target_date)
-        date_window = [(dt_obj + pd.Timedelta(days=d)).strftime('%Y-%m-%d') for d in [-1, 0]]
+        date_window = [(dt_obj + pd.Timedelta(days=d)).strftime('%Y-%m-%d') for d in [0, -1]]
         
         for d in date_window:
             match = log[log['GAME_DATE'].dt.strftime('%Y-%m-%d') == d]
             if not match.empty:
+                # If multiple games on that day, take the one with stats
                 actual_val = match.iloc[0].get(stat_type, 0)
                 logging.info(f"✅ Found NBA Stat: {found_name} {stat_type} = {actual_val} (date: {d})")
                 return float(actual_val)

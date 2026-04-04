@@ -227,13 +227,14 @@ async def check_and_resolve_all_pending_bets():
                             if h_score > a_score: winner = "HOME_WIN"
                             elif a_score > h_score: winner = "AWAY_WIN"
                             
-                            # 1. Ana Maç Bahsini Çöz (PENDING + son 3 günlük WON/LOST)
+                            # 1. Ana Maç Bahsini Çöz (Taraf/Alt-Üst)
                             await asyncio.to_thread(resolve_bet_status, event['id'], winner, h_score, a_score)
                             
                             # 2. Varsa Bu Maçın Player Prop'larını Kontrol Et
                             import bet_manager
-                            pending_props = [b for b in await asyncio.to_thread(bet_manager.get_bet_history) 
-                                            if b['status'] == 'PENDING' and b['match_id'].startswith(f"PROP_{event['id']}")]
+                            pending_bets = await asyncio.to_thread(bet_manager.get_bet_history)
+                            # match_id PROP_match_id... şeklinde olanları da tetikle
+                            pending_props = [b for b in pending_bets if b['status'] == 'PENDING' and b['match_id'].startswith(f"PROP_{event['id']}")]
                             
                             for prop in pending_props:
                                 await asyncio.to_thread(resolve_bet_status, prop['match_id'], "N/A")
@@ -259,8 +260,8 @@ async def emergency_resolve_stuck_bets():
             for prop in pending_props:
                 await asyncio.to_thread(resolve_bet_status, prop['match_id'], "STARTUP_RECOVERY")
         
-        # 3. Yanlış sonuçlanan prop bahisleri arka planda düzelt (bildirim gönderme)
-        await asyncio.to_thread(bet_manager.revalidate_resolved_bets)
+        # 3. Geriye dönük revalidation (Hatalı sonuçları düzelt)
+        await bet_manager.revalidate_resolved_bets()
                 
     except Exception as e:
         logging.error(f"Error in emergency_resolve_stuck_bets: {e}")
@@ -337,6 +338,11 @@ async def background_resolver():
             # Her 10 dakikada bir kontrol et
             logging.info("🔄 Arka plan bahis kontrolü başlatılıyor...")
             await check_and_resolve_all_pending_bets()
+            
+            # Geriye dönük yanlış sonuçları da kontrol et (H2H ve PROP dahil)
+            import bet_manager
+            await bet_manager.revalidate_resolved_bets()
+            
             await asyncio.sleep(600) 
         except Exception as e:
             logging.error(f"Error in background_resolver: {e}")
