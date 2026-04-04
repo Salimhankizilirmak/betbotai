@@ -145,27 +145,34 @@ def get_nba_player_game_stat(player_name, date_str, stat_type):
         log = playergamelog.PlayerGameLog(player_id=player_id, season='2025-26', timeout=10).get_data_frames()[0]
         
         # Tarihe göre filtrele
-        # NBA API tarih formatı GENELDE 'MAR 27, 2026' gibi olabilir, 
-        # ama GAME_DATE sütunu YYYY-MM-DD olabiliyor veya filtrelemek gerekebilir.
         log['GAME_DATE'] = pd.to_datetime(log['GAME_DATE'])
-        match = log[log['GAME_DATE'].dt.strftime('%Y-%m-%d') == target_date]
         
-        if not match.empty:
-            actual_val = match.iloc[0].get(stat_type, 0)
-            logging.info(f"Found NBA Stat: {player_name} {stat_type} = {actual_val}")
-            return float(actual_val)
-        else:
-            # Belki tarih 1 gün kaymıştır (Timezone)
-            from datetime import datetime, timedelta
-            dt = datetime.strptime(target_date, '%Y-%m-%d')
-            prev_date = (dt - timedelta(days=1)).strftime('%Y-%m-%d')
-            next_date = (dt + timedelta(days=1)).strftime('%Y-%m-%d')
-            
-            for d in [prev_date, next_date]:
-                match = log[log['GAME_DATE'].dt.strftime('%Y-%m-%d') == d]
-                if not match.empty:
-                    actual_val = match.iloc[0].get(stat_type, 0)
-                    return float(actual_val)
+        # Check target date, prev, and next (Timezone window)
+        dt_obj = pd.to_datetime(target_date)
+        date_window = [(dt_obj + pd.Timedelta(days=d)).strftime('%Y-%m-%d') for d in [-1, 0, 1]]
+        
+        for d in date_window:
+            match = log[log['GAME_DATE'].dt.strftime('%Y-%m-%d') == d]
+            if not match.empty:
+                actual_val = match.iloc[0].get(stat_type, 0)
+                logging.info(f"Found NBA Stat: {player_name} {stat_type} = {actual_val}")
+                return float(actual_val)
+        
+        # DNP CHECK: Eğer oyuncu logda bulunamadıysa, takımının o gün maçı var mıydı?
+        try:
+            # Oyuncunun takımını bul (veya lig genelinden o günkü maçları bul)
+            # Daha basit: leaguegamefinder ile o tarihteki TÜM maçları çek
+            from nba_api.stats.endpoints import scoreboardv2
+            sb = scoreboardv2.ScoreboardV2(game_date=target_date, timeout=10).get_data_frames()[0]
+            if not sb.empty:
+                # O gün maçlar var. Eğer oyuncunun takımı sahadaysa ve oyuncu yoksa DNP'dir.
+                # Not: Burada takım eşleştirmesi yapmak biraz karmaşık olabilir, 
+                # ama genel olarak oyuncu o tarihte/civarında yoksa ve o gün NBA'de maçlar varsa 'Final' mı diye bakalım.
+                if any(sb['GAME_STATUS_TEXT'] == 'Final'):
+                    logging.warning(f"DNP/Missing detected for {player_name} around {target_date}. Game(s) finished but no stats.")
+                    return -999.0 # Special DNP Signal
+        except:
+            pass
 
         return None
     except Exception as e:

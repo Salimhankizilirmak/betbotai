@@ -324,52 +324,58 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
             prediction, odds, amount, home, away = bet
             is_winner = False
             
-            # winner API'den gelen dize (örn: "Lakers" veya "HOME_WIN")
-            
-            # 0. Player Props Kontrolü
             if str(match_id).startswith("PROP_"):
-                # Örn: PROP_12345_LeBron James_player_points
-                parts = str(match_id).split("_")
-                if len(parts) >= 4:
-                    prop_player = parts[2]
-                    # market: 'player_points', 'player_rebounds', 'player_assists'
-                    # Ama nba_api 'PTS', 'REB', 'AST' kullanıyor.
-                    mkey = "_".join(parts[3:]) 
-                    stat_map = {"player_points": "PTS", "player_rebounds": "REB", "player_assists": "AST"}
-                    prop_stat = stat_map.get(mkey, "PTS")
+                # PROP RESOLUTION IMPROVEMENT: Parse player name from bet_target (SQL)
+                # bet_target format: "Carlton Carrington | REB OVER 3.5"
+                import re
+                target_str = str(prediction) # bet_target from SQL
+                match_p = re.search(r'(.*?)\s*\|\s*(\w+)\s+(OVER|UNDER)\s+([\d.]+)', target_str)
+                
+                if match_p:
+                    prop_player = match_p.group(1).strip()
+                    mkey_short = match_p.group(2).strip().upper() # PTS, REB, AST
+                    direction = match_p.group(3).strip().upper()
+                    target_line = float(match_p.group(4))
+                    
+                    # Convert short stat to NBA API stat
+                    stat_map = {"PTS": "PTS", "REB": "REB", "AST": "AST", "POINTS": "PTS", "REBOUNDS": "REB", "ASSISTS": "AST"}
+                    prop_stat = stat_map.get(mkey_short, "PTS")
                     
                     import nba_data
+                    # Get commence_time from the bet record
                     with get_db_connection() as conn_local:
                         cursor_local = conn_local.cursor()
                         cursor_local.execute("SELECT commence_time FROM bets WHERE match_id = %s", (match_id,))
                         row = cursor_local.fetchone()
-                        commence_time = row['commence_time'] if row else None
+                        commence_time = row[0] if row else None # Use index since row is a tuple
                     
                     if commence_time:
-                        actual_val = nba_data.get_nba_player_game_stat(prop_player, commence_time, prop_stat)
+                        actual_val = nba_data.get_nba_player_game_stat(prop_player, str(commence_time), prop_stat)
+                        
                         if actual_val is not None:
-                            import re
-                            # OVER/UNDER ve limiti çek
-                            ov_match = re.search(r'OVER\s+([\d.]+)', prediction)
-                            un_match = re.search(r'UNDER\s+([\d.]+)', prediction)
-                            
-                            try:
-                                target_line = 0.0
-                                if ov_match:
-                                    target_line = float(ov_match.group(1))
+                            # VOID/DNP check: If game finished and player has no stats, mark as void
+                            if actual_val == -999.0:
+                                logging.info(f"DNP DETECTED: {prop_player} didn't play. Voiding bet.")
+                                is_winner = False
+                                safe_odds = 1.0 # Void odds
+                                h_score, a_score = 0, 0
+                            else:
+                                if direction == "OVER":
                                     is_winner = actual_val > target_line
-                                elif un_match:
-                                    target_line = float(un_match.group(1))
-                                    is_winner = actual_val < target_line
                                 else:
-                                    logging.error(f"Prop parsing error: OVER/UNDER not found in {prediction}")
-                                    return False
+                                    is_winner = actual_val < target_line
                                 
-                                h_score, a_score = actual_val, target_line # Stats for display
+                                h_score, a_score = actual_val, target_line
                                 logging.info(f"PROP RESOLVED: {prop_player} {prop_stat} Actual={actual_val} vs Line={target_line} | Win={is_winner}")
-                            except Exception as e:
-                                logging.error(f"Prop processing error for {prediction}: {e}")
-                                return False
+                            
+                            status = 'WON' if is_winner else 'LOST'
+                            # For DNP, force profit to 0.0
+                            if actual_val == -999.0:
+                                profit = 0.0
+                                status = 'LOST' # Mark as LOST but with 0 profit (VOID)
+                            else:
+                                safe_odds = odds if odds > 1.0 else 1.90
+                                profit = (amount * safe_odds) - amount if is_winner else -amount
                         else:
                             logging.info(f"Prop {match_id} için henüz boxscore verisi yok (NBA API). Atlanıyor.")
                             return False
@@ -377,7 +383,7 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
                         logging.warning(f"Prop {match_id} için veritabanında commence_time bulunamadı.")
                         return False
                 else:
-                    logging.warning(f"Prop match_id formatı geçersiz: {match_id}")
+                    logging.error(f"Prop parsing error: bet_target format invalid: {target_str}")
                     return False
             
             # 1. Taraf Bahsi Kontrolü (HOME_WIN, AWAY_WIN, DRAW)
