@@ -494,7 +494,7 @@ async def revalidate_resolved_bets():
                 FROM bets 
                 WHERE status IN ('WON', 'LOST')
                   AND commence_time IS NOT NULL 
-                  AND CAST(commence_time AS TIMESTAMP) >= NOW() - INTERVAL '3 days'
+                  AND CAST(commence_time AS TIMESTAMP) >= NOW() - INTERVAL '10 days'
             """)
             resolved_bets = cursor.fetchall()
             
@@ -515,10 +515,12 @@ async def revalidate_resolved_bets():
                 current_status = bet['status']
                 sport = bet['sport_key']
 
-                # 2. 12 SAATLİK BEKLEME KONTROLÜ
+                # 2. 1S KISA BEKLEME (DAKİKA BAZLI - ŞU AN TAMİR İÇİN 1S YAPILDI)
                 last_check = reval_cache.get(db_id, 0)
-                if now - last_check < 43200: # 12 saat
-                    continue
+                if now - last_check < 1: # 1 saniye (Tamir döngüsü için zorla çalıştır)
+                    pass 
+                
+                logging.info(f"🔍 REVALIDATING: {target_str} (Status: {current_status}, MatchID: {match_id})")
                 
                 try:
                     from datetime import datetime, timezone
