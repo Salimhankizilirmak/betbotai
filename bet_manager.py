@@ -311,183 +311,137 @@ def fuzzy_match(name1, name2, threshold=0.7):
 def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
     """
     Bahis sonucunu günceller ve kar/zarar hesaplar.
+    Aynı match_id için birden fazla PENDING bahis (H2H, Alt/Üst vb.) olabilir.
     """
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT bet_target, odds_value, bet_amount, home_team, away_team FROM bets WHERE match_id = %s AND status = 'PENDING'", (match_id,))
-            bet = cursor.fetchone()
+            # BU MAÇ İÇİN TÜM BEKLEYEN BAHİSLERİ ÇEK
+            cursor.execute("SELECT id, bet_target, odds_value, bet_amount, home_team, away_team FROM bets WHERE match_id = %s AND status = 'PENDING'", (match_id,))
+            pending_bets = cursor.fetchall()
             
-            if not bet:
-                return False  # Zaten sonuçlanmış veya bulunamadı
-                
-            prediction = bet['bet_target']
-            odds = bet['odds_value']
-            amount = bet.get('bet_amount', 100.0)
-            home = bet['home_team']
-            away = bet['away_team']
-            is_winner = False
-            
-            if str(match_id).startswith("PROP_"):
-                # PROP RESOLUTION: Parse player name from bet_target (SQL)
-                # bet_target format: "Carlton Carrington | REB OVER 3.5"
-                target_str = str(prediction) # bet_target from SQL
-                match_p = re.search(r'(.*?)\s*\|\s*(\w+)\s+(OVER|UNDER)\s+([\d.]+)', target_str)
-                
-                if match_p:
-                    prop_player = match_p.group(1).strip()
-                    mkey_short = match_p.group(2).strip().upper() # PTS, REB, AST
-                    direction = match_p.group(3).strip().upper()
-                    target_line = float(match_p.group(4))
-                    
-                    # Convert short stat to NBA API stat
-                    stat_map = {"PTS": "PTS", "REB": "REB", "AST": "AST", "POINTS": "PTS", "REBOUNDS": "REB", "ASSISTS": "AST"}
-                    prop_stat = stat_map.get(mkey_short, "PTS")
-                    
-                    import nba_data
-                    # Get commence_time from the bet record
-                    with get_db_connection() as conn_local:
-                        cursor_local = conn_local.cursor()
-                        cursor_local.execute("SELECT commence_time FROM bets WHERE match_id = %s", (match_id,))
-                        row = cursor_local.fetchone()
-                        commence_time = row['commence_time'] if row else None
-                    
-                    if commence_time:
-                        from datetime import datetime, timezone, timedelta
-                        # Parse commence_time (str veya datetime olabilir)
-                        try:
-                            if hasattr(commence_time, 'tzinfo'):
-                                game_time = commence_time.replace(tzinfo=timezone.utc) if commence_time.tzinfo is None else commence_time
-                            else:
-                                game_time = datetime.fromisoformat(str(commence_time).replace('Z', '+00:00'))
-                        except:
-                            game_time = None
-                        
-                        # MAÇ HENUZ OYNAMADI KONTROLU: commence_time gelecekteyse atla!
-                        now_utc = datetime.now(timezone.utc)
-                        if game_time and game_time > now_utc:
-                            logging.info(f"Prop {match_id}: Maç henüz başlatmadı (Başlamasi: {game_time}). Atlanıyor.")
-                            return False
-                        
-                        actual_val = nba_data.get_nba_player_game_stat(prop_player, str(commence_time), prop_stat)
-                        
-                        if actual_val is not None:
-                            # VOID/DNP check: If game finished and player has no stats, mark as void
-                            if actual_val == -999.0:
-                                logging.info(f"DNP DETECTED: {prop_player} didn't play. Voiding bet.")
-                                is_winner = False
-                                safe_odds = 1.0 # Void odds
-                                h_score, a_score = 0, 0
-                            else:
-                                if direction == "OVER":
-                                    is_winner = actual_val > target_line
-                                else:
-                                    is_winner = actual_val < target_line
-                                
-                                h_score, a_score = actual_val, target_line
-                                logging.info(f"PROP RESOLVED: {prop_player} {prop_stat} Actual={actual_val} vs Line={target_line} | Win={is_winner}")
-                            
-                            status = 'WON' if is_winner else 'LOST'
-                            # For DNP, force profit to 0.0
-                            if actual_val == -999.0:
-                                profit = 0.0
-                                status = 'LOST' # Mark as LOST but with 0 profit (VOID)
-                            else:
-                                safe_odds = odds if odds > 1.0 else 1.90
-                                profit = (amount * safe_odds) - amount if is_winner else -amount
-                        else:
-                            logging.info(f"Prop {match_id} için henüz boxscore verisi yok (NBA API). Atlanıyor.")
-                            return False
-                    else:
-                        logging.warning(f"Prop {match_id} için veritabanında commence_time bulunamadı.")
-                        return False
-                else:
-                    logging.error(f"Prop parsing error: bet_target format invalid: {target_str}")
-                    return False
-            
-            # 1. Taraf Bahsi Kontrolü - Standart (HOME_WIN, AWAY_WIN, DRAW kodu)
-            elif prediction in ["HOME_WIN", "AWAY_WIN", "DRAW"]:
-                if prediction == winner:
-                    is_winner = True
-                elif winner not in ["HOME_WIN", "AWAY_WIN", "DRAW"]:
-                    target_team = home if prediction == "HOME_WIN" else away
-                    if fuzzy_match(target_team, winner):
-                        is_winner = True
-                    else:
-                        logging.info(f"Fuzzy match failed: {target_team} vs {winner}")
-                else:
-                    logging.info(f"Prediction {prediction} did not match winner {winner}")
-            
-            # 2. H2H Taraf Bahsi - Takım İsmiyle ("Houston Rockets @ 1.50" format)
-            elif " @ " in str(prediction) and ("OVER" not in str(prediction).upper() and "UNDER" not in str(prediction).upper()):
-                target_team = str(prediction).split(" @ ")[0].strip()
-                logging.info(f"H2H Team Bet: Checking if '{target_team}' won (winner={winner}, home={home}, away={away})")
-                # winner olarak HOME_WIN/AWAY_WIN/DRAW veya takım ismi gelebilir
-                if winner == "HOME_WIN":
-                    is_winner = fuzzy_match(target_team, home)
-                elif winner == "AWAY_WIN":
-                    is_winner = fuzzy_match(target_team, away)
-                elif winner == "DRAW":
-                    is_winner = False  # Taraf bahsi beraberlikte kaybeder
-                else:
-                    # winner takım ismiyle geldi
-                    is_winner = fuzzy_match(target_team, winner)
-                logging.info(f"H2H Team '{target_team}' vs winner '{winner}': is_winner={is_winner}")
-            
-            # 3. Alt/Üst Bahsi Kontrolü (OVER 2.5, UNDER 2.5, Under 2.5 Gol vb.)
-            elif h_score is not None and a_score is not None:
-                total_score = h_score + a_score
-                pred_upper = str(prediction).upper()
-                # "Under 2.5 Gol" veya "OVER 2.5" formatlarını destekle
-                over_m = re.search(r'OVER\s+([\d.]+)', pred_upper)
-                under_m = re.search(r'UNDER\s+([\d.]+)', pred_upper)
-                try:
-                    if over_m:
-                        point = float(over_m.group(1))
-                        if total_score > point:
-                            is_winner = True
-                        else:
-                            logging.info(f"Total {total_score} < OVER {point} for '{prediction}'")
-                    elif under_m:
-                        point = float(under_m.group(1))
-                        if total_score < point:
-                            is_winner = True
-                        else:
-                            logging.info(f"Total {total_score} >= UNDER {point} for '{prediction}'")
-                    else:
-                        logging.warning(f"Totals format not recognized: '{prediction}'")
-                except Exception as e:
-                    logging.error(f"Totals parsing error for '{prediction}': {e}")
-            else:
-                logging.warning(f"Bet {match_id}: Unresolvable - prediction='{prediction}', winner={winner}, h_score={h_score}")
+            if not pending_bets:
                 return False
             
-            # PROP bahisler için status/profit zaten yukarıda set edildi
-            if not str(match_id).startswith("PROP_"):
-                # Eğer API oran çekememişse (0.00) iflas etmemek için varsayılan 1.90 oran verelim
-                safe_odds = odds if odds > 1.0 else 1.90
-                status = 'WON' if is_winner else 'LOST'
-                profit = (amount * safe_odds) - amount if is_winner else -amount
-            
-            with db_lock:
-                cursor.execute("UPDATE bets SET status = %s, profit = %s WHERE match_id = %s", (status, profit, match_id))
-                conn.commit()
-            
-            # Telegram bildirimi
-            icon = "🟢" if is_winner else "🔴"
-            msg = (
-                f"{icon} <b>KUPON SONUÇLANDI!</b>\n\n"
-                f"🏀 <b>Maç:</b> {home} vs {away}\n"
-                f"🎯 <b>Alınan Hedef:</b> {prediction} @ {odds}\n"
-                f"📊 <b>Durum:</b> {status}\n"
-                f"💰 <b>Kâr/Zarar:</b> {'+' if is_winner else ''}{profit:.2f} BB"
-            )
-            send_telegram_message(msg)
+            for bet in pending_bets:
+                prediction = bet['bet_target']
+                odds = bet['odds_value']
+                amount = bet.get('bet_amount', 100.0)
+                home = bet['home_team']
+                away = bet['away_team']
+                db_id = bet['id']
+                is_winner = False
+                status = 'LOST'
+                profit = -amount
+                
+                if str(match_id).startswith("PROP_"):
+                    # PROP RESOLUTION
+                    target_str = str(prediction)
+                    match_p = re.search(r'(.*?)\s*\|\s*(\w+)\s+(OVER|UNDER)\s+([\d.]+)', target_str)
+                    if match_p:
+                        prop_player = match_p.group(1).strip()
+                        mkey_short = match_p.group(2).strip().upper()
+                        direction = match_p.group(3).strip().upper()
+                        target_line = float(match_p.group(4))
+                        stat_map = {"PTS": "PTS", "REB": "REB", "AST": "AST", "POINTS": "PTS", "REBOUNDS": "REB", "ASSISTS": "AST"}
+                        prop_stat = stat_map.get(mkey_short, "PTS")
+                        
+                        import nba_data
+                        # Get commence_time
+                        cursor.execute("SELECT commence_time FROM bets WHERE id = %s", (db_id,))
+                        row = cursor.fetchone()
+                        commence_time = row['commence_time'] if row else None
+                        
+                        if commence_time:
+                            from datetime import datetime, timezone
+                            try:
+                                if hasattr(commence_time, 'tzinfo'):
+                                    game_time = commence_time.replace(tzinfo=timezone.utc) if commence_time.tzinfo is None else commence_time
+                                else:
+                                    game_time = datetime.fromisoformat(str(commence_time).replace('Z', '+00:00'))
+                            except:
+                                game_time = None
+                                
+                            now_utc = datetime.now(timezone.utc)
+                            if game_time and game_time > now_utc:
+                                logging.info(f"Prop {match_id}: Maç henüz başlamadı ({game_time}). Atlanıyor.")
+                                continue
+                            
+                            actual_val = nba_data.get_nba_player_game_stat(prop_player, str(commence_time), prop_stat)
+                            if actual_val is not None:
+                                if actual_val == -999.0: # DNP
+                                    is_winner = False
+                                    status = 'LOST'
+                                    profit = 0.0
+                                else:
+                                    is_winner = actual_val > target_line if direction == "OVER" else actual_val < target_line
+                                    status = 'WON' if is_winner else 'LOST'
+                                    safe_odds = odds if odds > 1.0 else 1.90
+                                    profit = (amount * safe_odds) - amount if is_winner else -amount
+                            else:
+                                continue # No data yet
+                        else:
+                            continue
+                    else:
+                        continue
+                
+                # 1. Taraf Bahsi Kontrolü (Kodlu: HOME_WIN, AWAY_WIN, DRAW)
+                elif prediction in ["HOME_WIN", "AWAY_WIN", "DRAW"]:
+                    if prediction == winner:
+                        is_winner = True
+                    elif winner not in ["HOME_WIN", "AWAY_WIN", "DRAW"]:
+                        target_team = home if prediction == "HOME_WIN" else away
+                        if fuzzy_match(target_team, winner):
+                            is_winner = True
+                    status = 'WON' if is_winner else 'LOST'
+                    safe_odds = odds if odds > 1.0 else 1.90
+                    profit = (amount * safe_odds) - amount if is_winner else -amount
+
+                # 2. H2H Taraf Bahsi - Takım İsmiyle ("Team Name @ 1.50")
+                elif " @ " in str(prediction) and ("OVER" not in str(prediction).upper() and "UNDER" not in str(prediction).upper()):
+                    target_team = str(prediction).split(" @ ")[0].strip()
+                    if winner == "HOME_WIN": is_winner = fuzzy_match(target_team, home)
+                    elif winner == "AWAY_WIN": is_winner = fuzzy_match(target_team, away)
+                    elif winner == "DRAW": is_winner = False
+                    else: is_winner = fuzzy_match(target_team, winner)
+                    status = 'WON' if is_winner else 'LOST'
+                    safe_odds = odds if odds > 1.0 else 1.90
+                    profit = (amount * safe_odds) - amount if is_winner else -amount
+
+                # 3. Alt/Üst Bahsi Kontrolü
+                elif h_score is not None and a_score is not None:
+                    total_score = h_score + a_score
+                    pred_upper = str(prediction).upper()
+                    over_m = re.search(r'OVER\s+([\d.]+)', pred_upper)
+                    under_m = re.search(r'UNDER\s+([\d.]+)', pred_upper)
+                    if over_m:
+                        is_winner = total_score > float(over_m.group(1))
+                    elif under_m:
+                        is_winner = total_score < float(under_m.group(1))
+                    status = 'WON' if is_winner else 'LOST'
+                    safe_odds = odds if odds > 1.0 else 1.90
+                    profit = (amount * safe_odds) - amount if is_winner else -amount
+                
+                # Güncelle ve Bildir
+                with db_lock:
+                    cursor.execute("UPDATE bets SET status = %s, profit = %s WHERE id = %s", (status, profit, db_id))
+                    conn.commit()
+                
+                icon = "🟢" if is_winner else ("⚪️" if profit == 0 else "🔴")
+                msg = (
+                    f"{icon} <b>KUPON SONUÇLANDI!</b>\n\n"
+                    f"🏀 <b>Maç:</b> {home} vs {away}\n"
+                    f"🎯 <b>Alınan Hedef:</b> {prediction} @ {odds}\n"
+                    f"📊 <b>Durum:</b> {status}\n"
+                    f"💰 <b>Kâr/Zarar:</b> {'+' if is_winner else ''}{profit:.2f} BB"
+                )
+                send_telegram_message(msg)
             
             return True
     except Exception as e:
         logging.error(f"Bet resolution error for {match_id}: {e}")
         return False
+
 
 def get_pending_sports():
     """
@@ -502,112 +456,176 @@ def get_pending_sports():
         logging.error(f"Pending sports fetch error: {e}")
         return []
 
-def revalidate_resolved_bets():
+async def revalidate_resolved_bets():
     """
-    Son 2 günde yanlış sonuçlanan PROP bahislerini NBA API'den tekrar doğrular ve düzeltir.
-    - Gelecek maçlar PENDING'e geri alınır
-    - Yanlış WON/LOST tespitler düzeltilir
-    - Mevcut yapıyı bozmaz, yalnızca kayıtları günceller
+    Son 3 gün içinde sonuçlanmış bahisleri tekrar kontrol eder.
+    Hatalı sonuçlandırılan (Hiyerarşi veya API hatası nedeniyle) bahisleri düzeltir.
     """
-    import nba_data
-    from datetime import datetime, timezone
-    
-    logging.info("🔍 REVALIDATION: Çözümlenen prop bahisleri tekrar doğrulanıyor...")
+    logging.info("🔍 REVALIDATION: Çözümlenen bahisler tekrar doğrulanıyor...")
     corrected = 0
     reverted = 0
     
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            # Son 2 günlük çözümlenmiş PROP bahislerini al
+            # Son 3 günlük tüm sonuçlanmış bahisleri al (Sadece PROP değil, HEPSİ)
             cursor.execute("""
-                SELECT match_id, bet_target, odds_value, bet_amount, home_team, away_team, 
-                       status, profit, commence_time
+                SELECT id, match_id, bet_target, odds_value, bet_amount, home_team, away_team, 
+                       status, profit, commence_time, sport_key
                 FROM bets 
                 WHERE status IN ('WON', 'LOST')
-                  AND match_id LIKE 'PROP_%%'
                   AND commence_time IS NOT NULL 
                   AND CAST(commence_time AS TIMESTAMP) >= NOW() - INTERVAL '3 days'
             """)
-            resolved_props = cursor.fetchall()
-            logging.info(f"REVALIDATION: {len(resolved_props)} çözümlenmiş prop bahisi kontrol ediliyor...")
+            resolved_bets = cursor.fetchall()
+            logging.info(f"REVALIDATION: {len(resolved_bets)} sonuçlanmış bahis kontrol ediliyor...")
             
-            for bet in resolved_props:
+            import nba_data
+            from oddsapi_client import get_scores
+            
+            # Spor bazlı skor önbelleği (API çağrısını azaltmak için)
+            score_cache = {}
+
+            for bet in resolved_bets:
+                db_id = bet['id']
                 match_id = bet['match_id']
                 target_str = str(bet['bet_target'])
                 commence_time = bet['commence_time']
                 current_status = bet['status']
+                sport = bet['sport_key']
                 
                 try:
-                    # 1. Gelecek maç kontrolü: Bu maç hiç oynandı mı?
-                    if commence_time:
-                        if hasattr(commence_time, 'tzinfo'):
-                            game_time = commence_time if commence_time.tzinfo else commence_time.replace(tzinfo=timezone.utc)
-                        else:
-                            game_time = datetime.fromisoformat(str(commence_time).replace('Z', '+00:00'))
-                        
-                        if game_time > datetime.now(timezone.utc):
-                            # Bu maç henüz oynamadı, PENDING'e geri al
-                            with db_lock:
-                                cursor.execute("UPDATE bets SET status = 'PENDING', profit = 0.0 WHERE match_id = %s", (match_id,))
-                                conn.commit()
-                            reverted += 1
-                            logging.warning(f"REVALIDATION REVERTED: Oynamayan maç PENDING'e döndürüldü: {match_id}")
-                            continue
+                    # 1. Gelecek maç kontrolü
+                    from datetime import datetime, timezone
+                    if hasattr(commence_time, 'tzinfo'):
+                        game_time = commence_time if commence_time.tzinfo else commence_time.replace(tzinfo=timezone.utc)
+                    else:
+                        game_time = datetime.fromisoformat(str(commence_time).replace('Z', '+00:00'))
                     
-                    # 2. bet_target parse et
-                    match_p = re.search(r'(.*?)\s*\|\s*(\w+)\s+(OVER|UNDER)\s+([\d.]+)', target_str)
-                    if not match_p:
+                    if game_time > datetime.now(timezone.utc):
+                        with db_lock:
+                            cursor.execute("UPDATE bets SET status = 'PENDING', profit = 0.0 WHERE id = %s", (db_id,))
+                            conn.commit()
+                        reverted += 1
+                        logging.warning(f"REVALIDATION REVERTED: Gelecek maç PENDING yapıldı: {match_id}")
                         continue
                     
-                    prop_player = match_p.group(1).strip()
-                    mkey_short = match_p.group(2).strip().upper()
-                    direction = match_p.group(3).strip().upper()
-                    target_line = float(match_p.group(4))
-                    stat_map = {"PTS": "PTS", "REB": "REB", "AST": "AST", "POINTS": "PTS", "REBOUNDS": "REB", "ASSISTS": "AST"}
-                    prop_stat = stat_map.get(mkey_short, "PTS")
+                    correct_winner_flag = False
+                    found_data = False
+                    actual_stat_text = ""
+                    is_void = False
+
+                    # 2. PROP BAHİS Mİ?
+                    if str(match_id).startswith("PROP_"):
+                        match_p = re.search(r'(.*?)\s*\|\s*(\w+)\s+(OVER|UNDER)\s+([\d.]+)', target_str)
+                        if match_p:
+                            p_name = match_p.group(1).strip()
+                            m_key = match_p.group(2).strip().upper()
+                            direction = match_p.group(3).strip().upper()
+                            line = float(match_p.group(4))
+                            stat_map = {"PTS": "PTS", "REB": "REB", "AST": "AST", "POINTS": "PTS", "REBOUNDS": "REB", "ASSISTS": "AST"}
+                            
+                            actual_val = nba_data.get_nba_player_game_stat(p_name, str(commence_time), stat_map.get(m_key, "PTS"))
+                            if actual_val is not None:
+                                found_data = True
+                                if actual_val == -999.0: # DNP
+                                    correct_winner_flag = False
+                                    is_void = True
+                                    actual_stat_text = "DNP (Oynamadı)"
+                                else:
+                                    correct_winner_flag = actual_val > line if direction == "OVER" else actual_val < line
+                                    is_void = False
+                                    actual_stat_text = f"{actual_val} (Hat: {line})"
+                            else:
+                                continue
                     
-                    # 3. Gerçek istatistiği çek
-                    actual_val = nba_data.get_nba_player_game_stat(prop_player, str(commence_time), prop_stat)
-                    
-                    if actual_val is None or actual_val == -999.0:
-                        continue  # Veri yok, geç
-                    
-                    # 4. Doğru sonucu hesapla
-                    correct_winner = actual_val > target_line if direction == "OVER" else actual_val < target_line
-                    correct_status = 'WON' if correct_winner else 'LOST'
-                    
-                    if current_status != correct_status:
+                    # 3. NORMAL MAÇ BAHSİ (H2H / TOTALS)
+                    else:
+                        if sport not in score_cache:
+                            score_cache[sport] = await get_scores(sport)
+                        
+                        scores = score_cache[sport]
+                        match_score = next((s for s in scores if s['id'] == match_id), None)
+                        
+                        if match_score and match_score.get('completed'):
+                            found_data = True
+                            h_team = match_score['home_team']
+                            a_team = match_score['away_team']
+                            s_list = match_score.get('scores', [])
+                            if len(s_list) == 2:
+                                s1 = int(s_list[0]['score'])
+                                s2 = int(s_list[1]['score'])
+                                n1 = s_list[0]['name']
+                                hs = s1 if n1 == h_team else s2
+                                ascore = s2 if n1 == h_team else s1
+                                
+                                # Winner Kodunu Belirle
+                                winner_code = "DRAW"
+                                if hs > ascore: winner_code = "HOME_WIN"
+                                elif ascore > hs: winner_code = "AWAY_WIN"
+                                
+                                prediction = target_str
+                                if prediction in ["HOME_WIN", "AWAY_WIN", "DRAW"]:
+                                    correct_winner_flag = (prediction == winner_code)
+                                elif " @ " in prediction:
+                                    t_team = prediction.split(" @ ")[0].strip()
+                                    if winner_code == "HOME_WIN": correct_winner_flag = fuzzy_match(t_team, h_team)
+                                    elif winner_code == "AWAY_WIN": correct_winner_flag = fuzzy_match(t_team, a_team)
+                                    else: correct_winner_flag = False
+                                else:
+                                    # Totals check
+                                    total = hs + ascore
+                                    over_m = re.search(r'OVER\s+([\d.]+)', prediction.upper())
+                                    under_m = re.search(r'UNDER\s+([\d.]+)', prediction.upper())
+                                    if over_m: correct_winner_flag = total > float(over_m.group(1))
+                                    elif under_m: correct_winner_flag = total < float(under_m.group(1))
+                                
+                                is_void = False
+                                actual_stat_text = f"{hs}-{ascore}"
+                            else:
+                                found_data = False
+                        else:
+                            continue
+
+                    # 4. Karşılaştır ve Düzelt
+                    if found_data:
+                        correct_status = 'WON' if correct_winner_flag else 'LOST'
+                        is_winner = correct_winner_flag
+                        
+                        # Fix Profit Calculation for Corrected Status
                         odds = bet['odds_value']
                         amount = bet.get('bet_amount', 100.0)
                         safe_odds = odds if odds and odds > 1.0 else 1.90
-                        new_profit = (amount * safe_odds) - amount if correct_winner else -amount
                         
-                        with db_lock:
-                            cursor.execute(
-                                "UPDATE bets SET status = %s, profit = %s WHERE match_id = %s",
-                                (correct_status, new_profit, match_id)
+                        if is_void: # DNP durumu
+                            new_profit = 0.0
+                            correct_status = 'LOST' # Profit 0 olduğu sürece Lost görünmesi sorun değil (Void)
+                        else:
+                            new_profit = (amount * safe_odds) - amount if is_winner else -amount
+
+                        if current_status != correct_status or abs(float(bet['profit']) - new_profit) > 0.01:
+                            with db_lock:
+                                cursor.execute("UPDATE bets SET status = %s, profit = %s WHERE id = %s", (correct_status, new_profit, db_id))
+                                conn.commit()
+                            corrected += 1
+                            logging.info(f"✅ REVALIDATION FIXED: {target_str} | {current_status} → {correct_status}")
+                            
+                            # Bildirim
+                            icon = "🟢" if is_winner else ("⚪️" if is_void else "🔴")
+                            msg = (
+                                f"🔄 <b>DÜZELTME: KUPON GÜNCELLENDİ!</b>\n\n"
+                                f"⚽️🏀 <b>Maç:</b> {bet['home_team']} vs {bet['away_team']}\n"
+                                f"🎯 <b>Hedef:</b> {target_str}\n"
+                                f"📊 <b>Gerçek:</b> {actual_stat_text}\n"
+                                f"{icon} <b>Yeni Durum:</b> {correct_status}\n"
+                                f"💰 <b>Kâr/Zarar:</b> {'+' if is_winner else ''}{new_profit:.2f} BB"
                             )
-                            conn.commit()
-                        corrected += 1
-                        logging.info(f"✅ REVALIDATION FIXED: {prop_player} {prop_stat} Actual={actual_val} vs Line={target_line} | {current_status} → {correct_status} ({'+' if correct_winner else ''}{new_profit:.2f} BB)")
-                        
-                        # Telegram bildirimi: Hata düzeltildi
-                        icon = "🟢" if correct_winner else "🔴"
-                        msg = (
-                            f"🔄 <b>DÜZELTME: KUPON GÜNCELLENDI!</b>\n\n"
-                            f"🏀 <b>Hedef:</b> {target_str}\n"
-                            f"📊 <b>Gerçek:</b> {prop_stat} = {actual_val} (Hat: {target_line})\n"
-                            f"{icon} <b>Yeni Durum:</b> {correct_status}\n"
-                            f"💰 <b>Kâr/Zarar:</b> {'+' if correct_winner else ''}{new_profit:.2f} BB"
-                        )
-                        send_telegram_message(msg)
-                        
+                            send_telegram_message(msg)
+                
                 except Exception as inner_e:
-                    logging.error(f"Revalidation inner error for {match_id}: {inner_e}")
+                    logging.error(f"Revalidation error for {match_id}: {inner_e}")
                     continue
             
         logging.info(f"✅ REVALIDATION TAMAMLANDI: {corrected} düzeltildi, {reverted} PENDING'e geri alındı.")
     except Exception as e:
         logging.error(f"Revalidation error: {e}")
-
