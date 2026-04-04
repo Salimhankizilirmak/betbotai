@@ -42,7 +42,10 @@ groq_client = OpenAI(
 # Modeller
 AI_MODELS = [
     'gemini-1.5-flash',
-    'gemini-1.5-pro'
+    'gemini-1.5-flash-002',
+    'gemini-1.5-pro',
+    'gemini-1.5-pro-002',
+    'gemini-2.0-flash-exp'
 ]
 OPENAI_MODEL = "gpt-4o-mini"
 
@@ -338,7 +341,7 @@ async def calculate_risk(match_data):
             max_gemini_retries = gemini_api_manager.get_max_retries() * 2
             for attempt in range(max_gemini_retries):
                 cur_key = gemini_api_manager.get_current_key()
-                client = genai.Client(api_key=cur_key, http_options={'api_version': 'v1'})
+                client = genai.Client(api_key=cur_key)
                 try:
                     resp = await client.aio.models.generate_content(model=model_name, contents=gemini_initial_prompt)
                     if resp:
@@ -387,7 +390,7 @@ async def calculate_risk(match_data):
             max_gemini_retries = gemini_api_manager.get_max_retries() * 2
             for attempt in range(max_gemini_retries):
                 cur_key = gemini_api_manager.get_current_key()
-                client = genai.Client(api_key=cur_key, http_options={'api_version': 'v1'})
+                client = genai.Client(api_key=cur_key)
                 try:
                     resp = await client.aio.models.generate_content(model=model_name, contents=final_prompt)
                     if resp:
