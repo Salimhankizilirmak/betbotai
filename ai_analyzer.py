@@ -47,7 +47,7 @@ OPENAI_MODEL = "gpt-4o-mini"
 
 # Gemini kota koruma: son çağrı zamanını takip et
 _last_gemini_call_time = 0.0
-GEMINI_MIN_INTERVAL = 60  # Gemini çağrıları arası minimum 60 saniye
+GEMINI_MIN_INTERVAL = 15  # Gemini çağrıları arası minimum 15 saniye (hızlandırmak için düşürüldü)
 
 # Cache Ayarları
 CACHE_FILE = os.path.join("data", "ai_cache.json")
