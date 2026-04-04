@@ -41,11 +41,8 @@ groq_client = OpenAI(
 
 # Modeller
 AI_MODELS = [
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-002',
-    'gemini-1.5-pro',
-    'gemini-1.5-pro-002',
-    'gemini-2.0-flash-exp'
+    'gemini-2.5-flash',
+    'gemini-3.1-flash-live-preview'
 ]
 OPENAI_MODEL = "gpt-4o-mini"
 
@@ -334,7 +331,7 @@ async def calculate_risk(match_data):
             if not current_key:
                 break
                 
-            client = genai.Client(api_key=current_key, http_options={'api_version': 'v1beta'})
+            client = genai.Client(api_key=current_key)
             
             # Rotation support handled in retry_with_backoff for Gemini? No, let's just do standard request.
             # If 429 occurs, retry_with_backoff will sleep, but we should also rotate the key if it fails.
