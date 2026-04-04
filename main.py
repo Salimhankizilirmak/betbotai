@@ -333,15 +333,19 @@ def verify_and_place_bet(analysis, event):
 
 async def background_resolver():
     """Arka planda bahisleri periyodik olarak sonuçlandırır."""
+    last_revalidation = 0
     while True:
         try:
-            # Her 10 dakikada bir kontrol et
+            # Her 10 dakikada bir bekleyen bahisleri kontrol et
             logging.info("🔄 Arka plan bahis kontrolü başlatılıyor...")
             await check_and_resolve_all_pending_bets()
             
-            # Geriye dönük yanlış sonuçları da kontrol et (H2H ve PROP dahil)
-            import bet_manager
-            await bet_manager.revalidate_resolved_bets()
+            # Geriye dönük yanlış sonuçları da kontrol et (SAATLİK)
+            now = time.time()
+            if now - last_revalidation >= 3600: # 1 saat
+                import bet_manager
+                await bet_manager.revalidate_resolved_bets()
+                last_revalidation = now
             
             await asyncio.sleep(600) 
         except Exception as e:
