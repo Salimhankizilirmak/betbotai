@@ -247,25 +247,19 @@ async def emergency_resolve_stuck_bets():
         import bet_manager
         from oddsapi_client import get_scores
         
-        # 1. Bekleyen tüm sporları bul ve skorları çek (H2H maçlar için)
-        pending_sports = await asyncio.to_thread(bet_manager.get_pending_sports)
-        logging.info(f"EMERGENCY: {len(pending_sports)} farklı spor dalında bekleyen bahis var: {pending_sports}")
+        # 1. Bekleyen tüm bahisleri çöz (H2H + PROP)
+        await check_and_resolve_all_pending_bets()  # Argüman YOK
         
-        for sport in pending_sports:
-            logging.info(f"EMERGENCY: {sport} için son skorlar çekiliyor...")
-            await check_and_resolve_all_pending_bets(sport) # Belirli spor için çöz
-        
-        # 2. Hala PENDING kalan PROP bahislerini zorla çözmeyi dene (NBA API üzerinden)
+        # 2. Hala PENDING kalan PROP bahislerini zorla çözmeye çalış
         pending_bets = await asyncio.to_thread(bet_manager.get_bet_history)
         pending_props = [b for b in pending_bets if b['status'] == 'PENDING' and b['match_id'].startswith("PROP_")]
         
         if pending_props:
-            logging.info(f"EMERGENCY: {len(pending_props)} bekleyen PROP bahsi doğrudan NBA API ile çözülmeye çalışılıyor...")
+            logging.info(f"EMERGENCY: {len(pending_props)} bekleyen PROP bahsi NBA API ile çözülüyor...")
             for prop in pending_props:
                 await asyncio.to_thread(resolve_bet_status, prop['match_id'], "STARTUP_RECOVERY")
-                
-        # 3. Yanlış sonuçlanan eski bahisleri düzelt (Yapıyı bozmaz, sadece günceller)
-        logging.info("🔍 REVALIDATION başlatılıyor: Yanlış sonuçlanan bahisler kontrol ediliyor...")
+        
+        # 3. Yanlış sonuçlanan prop bahisleri arka planda düzelt (bildirim gönderme)
         await asyncio.to_thread(bet_manager.revalidate_resolved_bets)
                 
     except Exception as e:
