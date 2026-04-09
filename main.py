@@ -194,6 +194,38 @@ def get_logs():
 def health():
     return {"status": "ok", "port": 8005}
 
+@app.get("/api/stats")
+async def api_stats():
+    """
+    Tüm sistem istatistiklerini ve son analizleri döner.
+    """
+    from bet_manager import get_structured_stats
+    stats = get_structured_stats()
+    
+    # Son 10 AI analizini cache'den çek
+    latest_analyses = []
+    # AI_CACHE'deki öğeleri zamana göre sırala
+    sorted_cache = sorted(
+        AI_CACHE.items(), 
+        key=lambda x: x[1].get("_cached_at", 0) if isinstance(x[1], dict) else 0, 
+        reverse=True
+    )
+    
+    for event_id, analysis in sorted_cache[:15]:
+        if isinstance(analysis, dict) and analysis.get("bet_target") != "N/A":
+            # Maç detaylarını bulmaya çalış (Opsiyonel)
+            latest_analyses.append({
+                "event_id": event_id,
+                **analysis
+            })
+            
+    return {
+        "performance": stats,
+        "latest_analyses": latest_analyses,
+        "nba_props": NBA_PROPS_CACHE.get("data", [])[:10],
+        "server_time": datetime.now(IST).isoformat()
+    }
+
 async def check_and_resolve_all_pending_bets():
     """Bekleyen tüm bahislerin sonucunu kontrol eder ve sonuçlandırır."""
     try:
