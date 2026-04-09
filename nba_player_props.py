@@ -301,6 +301,35 @@ async def analyze_nba_player_props(event: dict) -> list:
     # Gather parallel but strictly gated by Semaphore(1)
     await asyncio.gather(*(analyze_one(p) for p in props))
 
-    logging.info(f"Props result: {len(recommendations)} recs from {len(props)} ({home_team} vs {away_team})")
-    return sorted(recommendations, key=lambda x: -x["confidence"])
+    # 3. FILTRELEME MANTIGI (Baron Kuralları)
+    # - Güvene göre sırala
+    recommendations.sort(key=lambda x: -x["confidence"])
+    
+    final_selections = []
+    used_players = set()
+    used_stats = set()
+    
+    for rec in recommendations:
+        # En fazla 3 oyuncu
+        if len(final_selections) >= 3:
+            break
+            
+        player = rec["player"]
+        stat = rec["stat"]
+        
+        # Kural 1: Aynı oyuncuya birden fazla bahis alınmaz
+        if player in used_players:
+            continue
+            
+        # Kural 2: Aynı maçta farklı 2 oyuncuya aynı kategori (PTS/REB/AST) oynanmaz
+        if stat in used_stats:
+            continue
+            
+        # Seçime ekle ve işaretle
+        final_selections.append(rec)
+        used_players.add(player)
+        used_stats.add(stat)
+
+    logging.info(f"Props result: {len(final_selections)} filtered recs from {len(recommendations)} candidates ({home_team} vs {away_team})")
+    return final_selections
 
