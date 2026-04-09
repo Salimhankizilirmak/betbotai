@@ -52,6 +52,17 @@ logging.basicConfig(
 
 app = FastAPI(title="BetBot AI")
 
+# CORS AYARLARI (Cross-Origin Resource Sharing)
+# Bu ayar, frontend veya dış sistemlerin (localhost:5173 vb.) API'ye erişebilmesini sağlar.
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Static files - Serve JS and CSS correctly
 app.mount("/js", StaticFiles(directory="frontend/js"), name="js")
 app.mount("/css", StaticFiles(directory="frontend/css"), name="css")
