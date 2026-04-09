@@ -145,22 +145,15 @@ def get_structured_stats():
             cursor.execute("SELECT sport_key, status, odds_value, profit, bet_amount FROM bets WHERE status != 'PENDING' ORDER BY created_at DESC")
             rows = cursor.fetchall()
             
-            # Bekleyen bahis sayısı
-            cursor.execute("SELECT COUNT(*) as count FROM bets WHERE status = 'PENDING'")
-            pending_count = cursor.fetchone()['count']
-            
-            if not rows:
-                return {
-                    "summary": {"total_resolved": 0, "wins": 0, "losses": 0, "win_rate": 0, "total_profit": 0},
-                    "leagues": {},
-                    "pending_count": pending_count
-                }
-            
+            # Bekleyen bahis detaylarını çek
+            cursor.execute("SELECT * FROM bets WHERE status = 'PENDING' ORDER BY created_at DESC")
+            pending_bets = [dict(r) for r in cursor.fetchall()]
+
             total = len(rows)
             wins = sum(1 for r in rows if r['status'] == 'WON')
             losses = sum(1 for r in rows if r['status'] == 'LOST')
             total_profit = sum(r['profit'] for r in rows)
-            win_rate = (wins / total) * 100
+            win_rate = (wins / total) * 100 if total > 0 else 0
             
             leagues = {}
             for r in rows:
@@ -185,7 +178,8 @@ def get_structured_stats():
                     "current_balance": round(get_current_balance(), 2)
                 },
                 "leagues": leagues,
-                "pending_count": pending_count,
+                "pending_bets": pending_bets,
+                "pending_count": len(pending_bets),
                 "timestamp": datetime.now().isoformat()
             }
     except Exception as e:
