@@ -528,8 +528,15 @@ async def analyze_event(event):
     risk_info["bet_amount"] = stake_amount
     
     if risk_score != 99:
+        # Cache'e maç bilgilerini de ekle ki API'den okumak kolay olsun
+        risk_info.update({
+            "home_team": home_team,
+            "away_team": away_team,
+            "sport_key": event.get("sport_key"),
+            "commence_time": event.get("commence_time"),
+            "_cached_at": time.time()
+        })
         AI_CACHE[event_id] = risk_info
-        AI_CACHE[event_id]["_cached_at"] = time.time()
         save_cache(AI_CACHE)
         
     return risk_info

@@ -116,43 +116,81 @@ def get_performance_metrics():
     AI'nın öğrenmesi için son 20 bahsin istatistiklerini hesaplar.
     Hangi liglerde başarılı/başarısız olduğumuzu döner.
     """
+    stats = get_structured_stats()
+    if not stats or stats.get("total_resolved", 0) == 0:
+        return "Henüz yeterli veri yok."
+    
+    summary = stats["summary"]
+    leagues = stats["leagues"]
+    
+    league_details = ", ".join([f"{l}: %{s['win_rate']:.0f}" for l, s in leagues.items()])
+    
+    worst_league = "Yok"
+    min_rate = 101
+    for l, s in leagues.items():
+        if s['win_rate'] < min_rate:
+            min_rate = s['win_rate']
+            worst_league = l
+            
+    return f"Başarı Oranı: %{summary['win_rate']:.0f}. En Başarısız Lig: {worst_league}. Lig Detayları: {league_details}."
+
+def get_structured_stats():
+    """
+    Frontend veya API için detaylı ve yapılandırılmış istatistikleri döner.
+    """
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            # Son 20 sonuçlanmış bahis
-            cursor.execute("SELECT sport_key, status, odds_value FROM bets WHERE status != 'PENDING' ORDER BY created_at DESC LIMIT 20")
+            # Tüm sonuçlanmış bahisler
+            cursor.execute("SELECT sport_key, status, odds_value, profit, bet_amount FROM bets WHERE status != 'PENDING' ORDER BY created_at DESC")
             rows = cursor.fetchall()
             
+            # Bekleyen bahis sayısı
+            cursor.execute("SELECT COUNT(*) as count FROM bets WHERE status = 'PENDING'")
+            pending_count = cursor.fetchone()['count']
+            
             if not rows:
-                return "Henüz yeterli veri yok."
+                return {
+                    "summary": {"total_resolved": 0, "wins": 0, "losses": 0, "win_rate": 0, "total_profit": 0},
+                    "leagues": {},
+                    "pending_count": pending_count
+                }
             
             total = len(rows)
             wins = sum(1 for r in rows if r['status'] == 'WON')
+            losses = sum(1 for r in rows if r['status'] == 'LOST')
+            total_profit = sum(r['profit'] for r in rows)
             win_rate = (wins / total) * 100
             
-            # Lig bazlı başarı
             leagues = {}
             for r in rows:
-                l = r['sport_key']
-                if l not in leagues: leagues[l] = {"wins": 0, "total": 0}
+                l = r['sport_key'] or "Unknown"
+                if l not in leagues:
+                    leagues[l] = {"wins": 0, "total": 0, "profit": 0}
                 leagues[l]["total"] += 1
-                if r['status'] == 'WON': leagues[l]["wins"] += 1
+                leagues[l]["profit"] += r['profit']
+                if r['status'] == 'WON':
+                    leagues[l]["wins"] += 1
             
-            league_stats = ", ".join([f"{l}: %{(s['wins']/s['total']*100):.0f}" for l, s in leagues.items()])
+            for l in leagues:
+                leagues[l]["win_rate"] = (leagues[l]["wins"] / leagues[l]["total"]) * 100
             
-            # En çok kaybettiren ligi bul
-            worst_league = "Yok"
-            min_rate = 101
-            for l, s in leagues.items():
-                rate = (s['wins'] / s['total']) * 100
-                if rate < min_rate:
-                    min_rate = rate
-                    worst_league = l
-            
-            return f"Başarı Oranı: %{win_rate:.0f}. En Başarısız Lig: {worst_league}. Lig Detayları: {league_stats}."
+            return {
+                "summary": {
+                    "total_resolved": total,
+                    "wins": wins,
+                    "losses": losses,
+                    "win_rate": round(win_rate, 2),
+                    "total_profit": round(total_profit, 2),
+                    "current_balance": round(get_current_balance(), 2)
+                },
+                "leagues": leagues,
+                "pending_count": pending_count,
+                "timestamp": datetime.now().isoformat()
+            }
     except Exception as e:
-        logging.error(f"Metrics error: {e}")
-        return "Performans verisi çekilemedi."
+        logging.error(f"Structured metrics error: {e}")
+        return None
 
 def get_current_balance(start_balance=10000.0):
     """Veritabanındaki kâr/zarar durumuna göre güncel bakiyeyi hesaplar."""
