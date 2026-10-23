@@ -114,13 +114,15 @@ def summary_text(event, res):
             f"beklenen değer {c['ev'] * 100:+.1f}% [{verdict}; eşik +%{strategy.FOOTBALL_MIN_EV * 100:.0f}, "
             f"{res['n_books']} şirket].")
 
-def to_analysis(event, res, explanation=None):
-    """Panel/AI_CACHE ve place_virtual_bet ile uyumlu analiz sözlüğü."""
+def to_analysis(event, res, explanation=None, facts_text=None):
+    """Panel/AI_CACHE ve place_virtual_bet ile uyumlu analiz sözlüğü: karar özeti + gerçek veriler + analiz."""
     c = res["best"] or res["top"]
     p = round(c["p_fair"] * 100)
     text = summary_text(event, res)
+    if facts_text:
+        text = f"{text}\n\n{facts_text}"
     if explanation:
-        text = f"{text}\n\n{explanation}"
+        text = f"{text}\n\n🧠 {explanation}"
     return {
         "bet_target": c["bet_target"] if res["best"] else "N/A",
         "odds_value": c["odds"],
@@ -134,6 +136,9 @@ def to_analysis(event, res, explanation=None):
         "p_fair": round(c["p_fair"], 4),
         "bookmaker": c["book"],
         "sharp_odds": c["sharp_odds"],
+        "market": c["market"],
+        "facts_text": facts_text,
+        "explanation": explanation,
     }
 
 def record_predictions(rows):

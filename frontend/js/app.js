@@ -144,92 +144,81 @@ async function fetchMatches(recommendedOnly = true) {
     }
 }
 
+function pickLabelTr(target, home, away) {
+    if (!target || target === 'N/A') return 'Değer yok — sadece analiz';
+    const map = {HOME_WIN: '1 · ' + home, DRAW: 'X · Beraberlik', AWAY_WIN: '2 · ' + away};
+    if (map[target]) return map[target];
+    const parts = String(target).split(' ');
+    if (parts.length === 2) return parts[1] + ' ' + (parts[0].toUpperCase() === 'OVER' ? 'Üst' : 'Alt');
+    return target;
+}
+
 function renderMatches(matches, recommendedOnly, targetId) {
     const grid = document.getElementById(targetId);
     if (!grid) return;
 
-    // Tracked Matches Dinamik Guncellemesi
     if (recommendedOnly) {
         const liveCountEl = document.getElementById('live-count');
-        if (liveCountEl) {
-            liveCountEl.innerText = matches.length;
-        }
+        if (liveCountEl) liveCountEl.innerText = matches.length;
     }
 
     if (matches.length === 0) {
-        grid.innerHTML = `<div class="glass-panel" style="padding: 20px; grid-column: 1 / -1; text-align: center; color: var(--text-secondary);"><i class="fa-solid fa-brain"></i> Baron şu an bülteni tarıyor olabilir, veya yüksek güvenli maç bulunamadı.</div>`;
+        grid.innerHTML = `<div class="glass-panel" style="padding: 20px; grid-column: 1 / -1; text-align: center; color: var(--text-secondary);"><i class="fa-solid fa-scale-balanced"></i> Önümüzdeki 24 saatte Pinnacle'a göre değerli seçim yok. Değer yoksa bahis alınmaz; maç analizleri "Upcoming" sayfasında.</div>`;
         return;
     }
 
     grid.innerHTML = '';
     matches.forEach(match => {
         const ai = match.ai_analysis || {};
-        const isAnalyzed = ai.risk_score > 0;
-        
-        const betAmount = ai.bet_amount || 100;
-        
-        let riskClass = 'risk-medium';
-        if (ai.risk_score < 30) riskClass = 'risk-low';
-        else if (ai.risk_score > 60) riskClass = 'risk-high';
-
-        let targetColor = '#3b82f6';
-        if (ai.bet_target && (ai.bet_target.includes('OVER') || ai.bet_target === 'HOME_WIN')) targetColor = '#10b981';
-        if (ai.bet_target && (ai.bet_target.includes('UNDER') || ai.bet_target === 'AWAY_WIN')) targetColor = '#f59e0b';
-
-        let badgeHtml = '';
-        if (isAnalyzed) {
-            badgeHtml = `
-            <div class="match-badge ${ai.is_recommended ? 'recommended' : 'analyzing'}">
-                <i class="fa-solid ${ai.is_recommended ? 'fa-fire' : 'fa-spinner fa-spin'}"></i>
-                ${ai.is_recommended ? 'Baron Onaylı' : 'Analiz Ediliyor'}
-            </div>`;
-        } else {
-            badgeHtml = `
-            <div class="match-badge" style="cursor:pointer;" onclick="analyzeMatch('${match.id}', '${match.home_team.replace(/'/g, "\\'")}', '${match.away_team.replace(/'/g, "\\'")}')">
-                <i class="fa-solid fa-magnifying-glass"></i> Analiz Et
-            </div>`;
-        }
+        const isValueMethod = ai.method === 'value_vs_pinnacle';
+        const isAnalyzed = isValueMethod || ai.risk_score > 0;
+        const recommended = isValueMethod && ai.is_recommended;
 
         const dateStr = match.commence_time ? new Date(match.commence_time).toLocaleString('tr-TR', {
             hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short'
         }) : 'Canlı/Yakında';
 
+        const color = recommended ? '#10b981' : '#94a3b8';
+        let badgeHtml;
+        if (recommended) {
+            badgeHtml = `<div class="match-badge recommended"><i class="fa-solid fa-gem"></i> Değerli seçim${ai.bet_placed ? ' · bahis alındı' : ''}</div>`;
+        } else if (isAnalyzed) {
+            badgeHtml = `<div class="match-badge analyzing"><i class="fa-solid fa-chart-simple"></i> Analiz</div>`;
+        } else {
+            badgeHtml = `<div class="match-badge" style="cursor:pointer;" onclick="analyzeMatch('${match.id}', '${match.home_team.replace(/'/g, "\\'")}', '${match.away_team.replace(/'/g, "\\'")}')"><i class="fa-solid fa-magnifying-glass"></i> Analiz Et</div>`;
+        }
+
         const card = document.createElement('div');
         card.className = 'match-card';
-        if (!isAnalyzed) {
-            card.style.opacity = '0.7';
-        }
+        if (!isAnalyzed) card.style.opacity = '0.7';
 
         let analysisHtml = '';
         if (isAnalyzed) {
+            const pFair = Number(ai.p_fair != null ? ai.p_fair * 100 : ai.win_probability || 0);
+            const ev = ai.ev != null ? (ai.ev * 100) : null;
+            const pickText = isValueMethod ? pickLabelTr(ai.bet_target, match.home_team, match.away_team) : (ai.bet_target || 'N/A');
+            const priceText = recommended ? ` @ ${(ai.odds_value || 0).toFixed(2)}` : '';
+            const bookText = recommended && ai.bookmaker ? `<span style="font-size:11px; color:var(--text-secondary); font-weight:500;"> · ${escapeHtmlText(ai.bookmaker)}</span>` : '';
+            const stakeText = ai.bet_placed && ai.bet_amount ? `<div style="font-size:11px; color:var(--text-secondary); margin-top:4px;">Sanal bahis: ${Number(ai.bet_amount).toFixed(0)} BB</div>` : '';
+            const metrics = isValueMethod ? `
+                <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-secondary); margin-bottom:6px;">
+                    <span>Pinnacle adil olasılık <b style="color:var(--text-primary);">%${pFair.toFixed(1)}</b></span>
+                    ${ev != null ? `<span>Beklenen değer <b style="color:${ev >= 0 ? '#10b981' : '#ef4444'};">${ev >= 0 ? '+' : ''}${ev.toFixed(1)}%</b></span>` : ''}
+                </div>
+                <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100, pFair)}%; background:${color};"></div></div>` : `
+                <div style="font-size:11px; color:var(--text-secondary);">Eski analiz (LLM)</div>`;
             analysisHtml = `
             <div class="ai-analysis">
-                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">Baron'un Kesin Kararı (${betAmount} BB)</div>
-                <div class="target" style="color: ${targetColor}; font-weight: 800; font-size: 16px;">
-                    ${ai.bet_target || 'N/A'} @ ${(ai.odds_value || 0).toFixed(2)}
-                </div>
-                
-                <div style="margin-top: 15px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
-                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; display: flex; justify-content: space-between;">
-                        <span>Güven Skoru</span>
-                        <span style="color: var(--text-primary); font-weight: 600;">%${(ai.win_probability || 0).toFixed(0)}</span>
-                    </div>
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: ${Math.min(100, ai.win_probability || 0)}%; background: ${targetColor};"></div>
-                    </div>
-                </div>
-                
-                <div class="baron-report-container" style="margin-top: 15px;">
-                    <button class="toggle-analysis" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--panel-border); color: var(--text-secondary); padding: 8px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">${recommended ? 'Seçim' : 'Karar'}</div>
+                <div class="target" style="color:${color}; font-weight:800; font-size:15px;">${escapeHtmlText(pickText)}${priceText}${bookText}</div>
+                ${stakeText}
+                <div style="margin-top: 12px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">${metrics}</div>
+                <div class="baron-report-container" style="margin-top: 12px;">
+                    <button class="toggle-analysis" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--panel-border); color: var(--text-secondary); padding: 8px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px;">
                         <i class="fa-solid fa-chevron-down"></i> Analizi Gör
                     </button>
                     <div class="baron-report-content" style="max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; background: rgba(0,0,0,0.2); border-radius: 0 0 8px 8px; font-size: 12px; line-height: 1.6; color: #cbd5e1;">
-                        <div style="padding: 15px; border-left: 3px solid ${targetColor};">
-                            <div style="font-weight: bold; margin-bottom: 8px; color: #fff; display: flex; align-items: center; gap: 6px;">
-                                <i class="fa-solid fa-brain"></i> Baron Raporu
-                            </div>
-                            ${ai.analysis ? ai.analysis.replace(/\n/g, '<br>') : 'Analiz detayı bulunamadı.'}
-                        </div>
+                        <div style="padding: 15px; border-left: 3px solid ${color}; white-space: pre-line;">${escapeHtmlText(ai.analysis || 'Analiz detayı bulunamadı.')}</div>
                     </div>
                 </div>
             </div>`;
@@ -237,12 +226,12 @@ function renderMatches(matches, recommendedOnly, targetId) {
 
         card.innerHTML = `
             ${badgeHtml}
-            <div class="match-league">${match.sport_title || match.sport_key}</div>
+            <div class="match-league">${escapeHtmlText(match.sport_title || match.sport_key)}</div>
             <div class="match-time"><i class="fa-regular fa-clock"></i> ${dateStr}</div>
             <div class="match-teams">
-                <div class="team">${match.home_team}</div>
+                <div class="team">${escapeHtmlText(match.home_team)}</div>
                 <div style="font-size: 11px; color: var(--text-secondary); margin: 4px 0;">vs</div>
-                <div class="team">${match.away_team}</div>
+                <div class="team">${escapeHtmlText(match.away_team)}</div>
             </div>
             ${analysisHtml}
         `;

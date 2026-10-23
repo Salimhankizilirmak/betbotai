@@ -81,52 +81,61 @@ async def get_index():
         return f.read()
 
 @app.get("/api/odds/upcoming")
-async def api_upcoming(recommended: bool = False):
+async def api_upcoming(recommended: bool = False, hours: int = 24):
     """
-    Tüm yaklaşan maçları veya sadece önerilenleri döner.
+    Önümüzdeki `hours` saat (varsayılan 24) içinde başlayacak maçlar ve analizleri. recommended=true: sadece
+    Pinnacle'a göre değer bulunanlar (value_vs_pinnacle); sanal bahis alındıysa gerçek stake ile.
     """
-    sports_to_fetch = ANALYZED_SPORTS
+    from datetime import timezone, timedelta
+    from bet_manager import get_db_connection
     await asyncio.to_thread(reload_ai_cache)
     await warm_cache_from_shared(DASHBOARD_ODDS_MAX_AGE)
 
     all_raw = []
-    for sport in sports_to_fetch:
+    for sport in ANALYZED_SPORTS:
         try:
             data = await get_odds(sport, max_age=DASHBOARD_ODDS_MAX_AGE)
             if isinstance(data, list):
                 all_raw.extend(data)
-                logging.info(f"API: {sport} liginden {len(data)} maç çekildi.")
         except Exception as e:
             logging.error(f"Error fetching odds for {sport}: {e}")
 
-    seen = set()
-    unique_matches = []
-    for m in all_raw:
-        if m.get("id") and m["id"] not in seen:
-            unique_matches.append(m)
-            seen.add(m["id"])
-
-    final_matches = []
-    default_analysis = {
-        "risk_score": 0,
-        "win_probability": 0,
-        "analysis": "Henüz analiz edilmedi.",
-        "bet_target": "N/A",
-        "odds_value": 0.0,
-        "is_recommended": False,
-        "bet_amount": 100
-    }
-
-    for match in unique_matches:
-        analysis = AI_CACHE.get(match["id"], default_analysis)
-        match["ai_analysis"] = {**default_analysis, **analysis}
-
+    now = datetime.now(timezone.utc)
+    horizon = now + timedelta(hours=max(1, min(hours, 24 * 14)))
+    default_analysis = {"risk_score": 0, "win_probability": 0, "analysis": "Henüz analiz edilmedi.",
+                        "bet_target": "N/A", "odds_value": 0.0, "is_recommended": False}
+    seen, final_matches = set(), []
+    for m in sorted(all_raw, key=lambda x: x.get("commence_time", "")):
+        if not m.get("id") or m["id"] in seen:
+            continue
+        seen.add(m["id"])
+        try:
+            ct = datetime.fromisoformat(m["commence_time"].replace("Z", "+00:00"))
+        except Exception:
+            continue
+        if ct <= now or ct > horizon:
+            continue
+        analysis = {**default_analysis, **AI_CACHE.get(m["id"], {})}
         if recommended:
-            if match["ai_analysis"].get("is_recommended"):
-                final_matches.append(match)
-        else:
-            final_matches.append(match)
+            # Eski LLM analizleri (method yok) artık önerilmez; sadece değer yöntemi ve 24 saat penceresi
+            if not (analysis.get("method") == "value_vs_pinnacle" and analysis.get("is_recommended")):
+                continue
+        match = {k: v for k, v in m.items() if k != "bookmakers"}  # panel oran listesini kullanmıyor (~1 MB)
+        match["ai_analysis"] = analysis
+        final_matches.append(match)
 
+    if recommended and final_matches:
+        try:
+            with get_db_connection() as conn, conn.cursor() as cur:
+                cur.execute("SELECT match_id, bet_amount, bet_target FROM bets WHERE match_id = ANY(%s)",
+                            ([x["id"] for x in final_matches],))
+                placed = {r["match_id"]: r for r in cur.fetchall()}
+            for x in final_matches:
+                b = placed.get(x["id"])
+                x["ai_analysis"]["bet_placed"] = bool(b)
+                x["ai_analysis"]["bet_amount"] = b["bet_amount"] if b else None
+        except Exception as e:
+            logging.error(f"bet lookup error: {e}")
     return final_matches
 
 @app.api_route("/api/analyze/{event_id}", methods=["GET", "POST"])
@@ -415,6 +424,9 @@ async def background_resolver():
             logging.error(f"Error in background_resolver: {e}")
             await asyncio.sleep(60)
 
+MAX_LLM_ANALYSES_PER_RUN = 15  # tur başına en fazla yeni LLM analizi (önbellekteki analizler sayılmaz)
+EXPLAIN_VERSION = 3            # analiz istemi/veri bloğu değişince artır: eski analizler yeniden yazılır
+
 async def run_value_cycle(events, max_bets=10, label="maç"):
     """
     Maç bahisleri (futbol + basketbol): Pinnacle marjsız olasılığı vs şirketler arası en iyi oran (value_bets.py).
@@ -422,22 +434,47 @@ async def run_value_cycle(events, max_bets=10, label="maç"):
     """
     import value_bets as vb
     import cache_store
+    import match_context
     from ai_analyzer import explain_value_pick, AI_CACHE_NAMESPACE
-    from datetime import timezone
+    from datetime import timezone, timedelta
     now = datetime.now(timezone.utc)
-    evaluated, cache_items, placed = [], {}, 0
+    soon = now + timedelta(hours=24)
+    evaluated, cache_items, placed, llm_calls = [], {}, 0, 0
+
+    async def rich(e, res, analysis):
+        """Gerçek veri bloğu + LLM analizi; aynı maç/seçim için 12 saat içindeki analiz yeniden kullanılır."""
+        nonlocal llm_calls
+        builder = match_context.football_context if e.get("sport_key", "").startswith("soccer") else match_context.basketball_context
+        _, facts_text = await asyncio.to_thread(builder, e, res)
+        prev = AI_CACHE.get(e["id"]) or {}
+        explanation = None
+        if (prev.get("explained_pick") == analysis["bet_target"] and prev.get("explain_version") == EXPLAIN_VERSION
+                and time.time() - prev.get("explained_at", 0) < 12 * 3600):
+            explanation = prev.get("explanation")
+        elif llm_calls < MAX_LLM_ANALYSES_PER_RUN:
+            llm_calls += 1
+            explanation = await explain_value_pick(e, analysis, facts_text)
+        out = vb.to_analysis(e, res, explanation, facts_text)
+        if explanation:
+            out["explained_pick"] = analysis["bet_target"]
+            out["explain_version"] = EXPLAIN_VERSION
+            out["explained_at"] = prev.get("explained_at") if explanation == prev.get("explanation") else time.time()
+        return out
+
     for e in sorted(events, key=lambda x: x.get("commence_time", "")):
         try:
-            if datetime.fromisoformat(e["commence_time"].replace("Z", "+00:00")) <= now:
+            ct = datetime.fromisoformat(e["commence_time"].replace("Z", "+00:00"))
+            if ct <= now:
                 continue
             res = vb.evaluate_event(e)
             if not res:
                 continue
             evaluated.append((e, res))
             analysis = vb.to_analysis(e, res)
-            if res["best"] and placed < max_bets and not await asyncio.to_thread(check_bet_exists, e["id"]):
-                explanation = await explain_value_pick(e, analysis)
-                analysis = vb.to_analysis(e, res, explanation)
+            will_bet = bool(res["best"]) and placed < max_bets and not await asyncio.to_thread(check_bet_exists, e["id"])
+            if res["best"] and (ct <= soon or will_bet):
+                analysis = await rich(e, res, analysis)
+            if will_bet:
                 multiplier = await get_safe_mode_multiplier()
                 stake = calculate_kelly_stake(analysis["odds_value"], analysis["win_probability"], get_current_balance())
                 logging.info(f"✅ DEĞER BAHSİ ({label}): {e['home_team']} vs {e['away_team']} | {analysis['bet_target']} "
@@ -450,12 +487,25 @@ async def run_value_cycle(events, max_bets=10, label="maç"):
             cache_items[e["id"]] = entry
         except Exception as ex:
             logging.error(f"Değer turu hatası {e.get('id')}: {ex}")
+
+    # 2. geçiş: 24 saat içindeki değer OLMAYAN maçlar da gerçek veri + (bütçe kalırsa) analiz alır;
+    # analiz bahis önermez, değer olmadığını açıkça söyler
+    for e, res in evaluated:
+        if res["best"] or e["id"] not in cache_items:
+            continue
+        try:
+            if datetime.fromisoformat(e["commence_time"].replace("Z", "+00:00")) > soon:
+                continue
+            entry = {**cache_items[e["id"]], **(await rich(e, res, vb.to_analysis(e, res)))}
+            AI_CACHE[e["id"]] = cache_items[e["id"]] = entry
+        except Exception as ex:
+            logging.error(f"Günlük analiz hatası {e.get('id')}: {ex}")
     await asyncio.to_thread(cache_store.put_many, AI_CACHE_NAMESPACE, cache_items)
     await asyncio.to_thread(vb.record_predictions, evaluated)
     n_value = sum(1 for _, r in evaluated if r["best"])
     logging.info(f"🎯 Değer turu ({label}): {len(events)} maç, {len(evaluated)} Pinnacle referanslı, "
-                 f"{n_value} değerli, {placed} bahis.")
-    return {"listed": len(events), "evaluated": len(evaluated), "value": n_value, "bets": placed}
+                 f"{n_value} değerli, {placed} bahis, {llm_calls} yeni analiz.")
+    return {"listed": len(events), "evaluated": len(evaluated), "value": n_value, "bets": placed, "analyses": llm_calls}
 
 async def run_analysis_cycle(resolve_first=True):
     """

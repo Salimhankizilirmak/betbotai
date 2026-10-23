@@ -569,41 +569,45 @@ async def analyze_odds(odds_data):
     return results
 
 
-async def explain_value_pick(match, analysis, timeout=45):
+async def explain_value_pick(match, analysis, facts_text=None, timeout=45):
     """
-    Değer bahsi için kısa Türkçe gerekçe (Telegram/panel). Karar value_bets.py'de verilir;
-    LLM olasılık üretmez, rakamları değiştiremez. Başarısız olursa None (özet metin yeterli).
+    Değer seçimi için Türkçe maç analizi (Telegram/panel). Karar value_bets.py'de verilir; LLM olasılık üretmez.
+    facts_text: match_context'in topladığı gerçek veriler — LLM sadece bunları kullanır. Başarısız olursa None.
     """
     home, away = match.get("home_team", ""), match.get("away_team", "")
     sport_key = match.get("sport_key", "")
     is_basketball = sport_key.startswith("basketball")
-    try:
-        if sport_key == "basketball_nba":
-            stats = await asyncio.to_thread(get_nba_team_stats, home, away)
-            stats = f"{stats} | {await asyncio.to_thread(get_nba_team_stats, away)}"
-        elif "euroleague" in sport_key:
-            stats = f"{await get_euroleague_team_stats(home)} | {await get_euroleague_team_stats(away)}"
-        else:
-            import football_data
-            league_key = ODDS_TO_STATS_MAP.get(sport_key)
-            forms = await asyncio.to_thread(lambda: [football_data.team_form(t, league_key) for t in (home, away)])
-            stats = " | ".join(f for f in forms if f) or "yok"
-    except Exception:
-        stats = "yok"
-    if not stats or "not found" in stats.lower() or "bulunamadı" in stats.lower():
-        stats = "yok"
+    if not facts_text:
+        try:
+            if sport_key == "basketball_nba":
+                facts_text = f"{await asyncio.to_thread(get_nba_team_stats, home, away)} | {await asyncio.to_thread(get_nba_team_stats, away)}"
+            elif "euroleague" in sport_key:
+                facts_text = f"{await get_euroleague_team_stats(home)} | {await get_euroleague_team_stats(away)}"
+        except Exception:
+            facts_text = None
     sport_tr = "basketbol" if is_basketball else "futbol"
+    if analysis.get("is_recommended"):
+        decision = (f"Seçim (değiştirme): {analysis['recommendation']} @ {analysis['odds_value']:.2f} ({analysis['bookmaker']})\n"
+                    f"Pinnacle marjsız olasılığı: %{analysis['p_fair'] * 100:.1f}, beklenen değer: {analysis['ev'] * 100:+.1f}%\n\n")
+        structure = "(4) bu seçimin neden değerli olduğu ve riski."
+    else:
+        decision = ("Karar: Mevcut fiyatlarda hiçbir şirket Pinnacle'ın adil fiyatını yeterince geçmiyor, bu maçta BAHİS ÖNERİLMİYOR. "
+                    "Bir seçim önerme; maçın önizlemesini yap ve en olası senaryoları Pinnacle olasılıklarıyla açıkla.\n\n")
+        structure = "(4) neden bu fiyatlarla bahis için değer olmadığı (kısa)."
     prompt = (
-        f"Sen bir {sport_tr} bahis analistisin. SADECE TÜRKÇE yaz, en fazla 3 kısa cümle.\n"
+        f"Sen deneyimli bir {sport_tr} analistisin. SADECE TÜRKÇE, akıcı ve profesyonel bir dille 4-6 cümlelik "
+        f"bir maç analizi yaz (madde işareti kullanma).\n\n"
         f"Maç: {home} - {away}\n"
-        f"Karar (değiştirme): {analysis['recommendation']} @ {analysis['odds_value']:.2f} ({analysis['bookmaker']}).\n"
-        f"Gerekçe verisi: Pinnacle marjsız olasılığı %{analysis['p_fair'] * 100:.1f}, beklenen değer "
-        f"{analysis['ev'] * 100:+.1f}%. Takım verisi: {stats[:1200]}\n"
-        "Kurallar: Yeni olasılık veya yüzde uydurma; 'garanti', 'kesin' gibi ifadeler kullanma. "
-        "Değer, bu şirketin fiyatının keskin piyasanın (Pinnacle) adil fiyatından yüksek olmasından gelir; bunu belirt. "
-        "Beklenen değer kazanma olasılığını değiştirmez, sadece fiyatın adil fiyattan iyi olduğunu gösterir; "
-        "olasılığın arttığını ima etme. "
-        "Takım verisi varsa 1-2 somut rakam kullan; 'yok' ise veriden hiç bahsetme."
+        f"{decision}"
+        f"GERÇEK VERİLER (sadece bunları kullan):\n{facts_text or 'Ek veri yok.'}\n\n"
+        "Yapı: (1) iki takımın durumu ve formu, (2) eşleşme — hücum/savunma (futbolda xG ve isabetli şut, basketbolda "
+        "attığı/yediği sayı ve kilit oyuncular), ev/deplasman formu, "
+        f"(3) piyasa — Pinnacle olasılıkları ve varsa oran hareketi, {structure}\n"
+        "Kurallar: Rakamları, galibiyet/beraberlik/mağlubiyet sayılarını ve oran hareketinin yönünü tablodan AYNEN al; "
+        "yeniden sayma veya yorumla değiştirme. Verilerde olmayan hiçbir rakam, oyuncu, sakatlık veya haber uydurma. "
+        "'Garanti', 'kesin', 'banko' deme. "
+        "Değer, bu şirketin fiyatının Pinnacle'ın adil fiyatından yüksek olmasından gelir; beklenen değer kazanma "
+        "olasılığını artırmaz. Veriler seçimin aleyhine işaret ediyorsa bunu da dürüstçe söyle."
     )
     try:
         key = gemini_api_manager.get_current_key()
@@ -611,15 +615,15 @@ async def explain_value_pick(match, analysis, timeout=45):
             client = genai.Client(api_key=key)
             resp = await asyncio.wait_for(client.aio.models.generate_content(model=AI_MODELS[0], contents=prompt), timeout)
             if resp and resp.text:
-                return resp.text.strip()[:700]
+                return resp.text.strip()[:1400]
     except Exception as e:
-        logging.warning(f"Gemini gerekçe hatası: {str(e)[:120]}")
+        logging.warning(f"Gemini analiz hatası: {str(e)[:120]}")
         if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
             gemini_api_manager.rotate_key()
     try:
         text = await asyncio.wait_for(analyze_with_fallback(prompt), timeout)
         if text and "başarısız" not in text:
-            return text.strip()[:700]
+            return text.strip()[:1400]
     except Exception as e:
-        logging.warning(f"Fallback gerekçe hatası: {str(e)[:120]}")
+        logging.warning(f"Yedek model analiz hatası: {str(e)[:120]}")
     return None
