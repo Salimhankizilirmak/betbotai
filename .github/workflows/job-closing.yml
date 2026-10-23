@@ -1,8 +1,8 @@
 name: job-closing
 # Kapanış oranları (CLV/backtest için). 10 dakikada bir bakar; sadece başlamak üzere maç varsa kredi harcar.
 on:
-  schedule:
-    - cron: "*/10 * * * *"
+  # Zamanlama Supabase pg_cron'dan (supabase/migrations/*_pg_cron_github_dispatch.sql);
+  # GitHub 'schedule' tetikleyicisi bu repoda çalışmadığı için kaldırıldı
   workflow_dispatch:
 permissions:
   contents: read

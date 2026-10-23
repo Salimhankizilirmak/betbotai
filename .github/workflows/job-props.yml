@@ -1,8 +1,8 @@
 name: job-props
 # NBA oyuncu prop analizi; tip-off'lardan önce günde 2 kez (UTC 15:20 ve 22:20 = TR 18:20 ve 01:20)
 on:
-  schedule:
-    - cron: "20 15,22 * * *"
+  # Zamanlama Supabase pg_cron'dan (supabase/migrations/*_pg_cron_github_dispatch.sql);
+  # GitHub 'schedule' tetikleyicisi bu repoda çalışmadığı için kaldırıldı
   workflow_dispatch:
 permissions:
   contents: read
