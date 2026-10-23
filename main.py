@@ -471,7 +471,9 @@ async def run_value_cycle(events, max_bets=10, label="maç"):
                 continue
             evaluated.append((e, res))
             analysis = vb.to_analysis(e, res)
-            will_bet = bool(res["best"]) and placed < max_bets and not await asyncio.to_thread(check_bet_exists, e["id"])
+            # Bahis sadece önümüzdeki 24 saatin maçlarına (panelde görünen "günün seçimleri"; uzak maçlarda oran bayatlar)
+            will_bet = (bool(res["best"]) and ct <= soon and placed < max_bets
+                        and not await asyncio.to_thread(check_bet_exists, e["id"]))
             if res["best"] and (ct <= soon or will_bet):
                 analysis = await rich(e, res, analysis)
             if will_bet:
