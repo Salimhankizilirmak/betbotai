@@ -81,6 +81,7 @@ def _parse_props(event_data: dict) -> list:
                 if not already and pdata["over_odds"] and pdata["line"]:
                     props.append({
                         "player": player_name,
+                        "book": bookmaker.get("key"),
                         "market": mkey,
                         "stat": stat,
                         "line": pdata["line"],
@@ -284,6 +285,7 @@ async def analyze_nba_player_props(event: dict) -> list:
                   f"bu sezon {r['season_games']} maç ({r['n_prev']} toplam).")
         recommendations.append({
             "player": prop["player"],
+            "book": prop.get("book"),
             "stat": prop["stat"],
             "market": prop["market"],
             "line": r["line"],

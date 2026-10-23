@@ -156,3 +156,39 @@ def record_predictions(rows):
     except Exception as ex:
         import logging
         logging.error(f"value predictions yazma hatası: {ex}")
+
+def book_candidates(event, sharp=None):
+    """
+    Kupon için: her şirketin KENDİ fiyatıyla değerli seçimleri (bir kupon tek şirkette oynanır).
+    Döner: {book: [aday, ...]}; adaylar EV eşiği/üst sınırı ve oran aralığını geçmiş, maç başına tümü.
+    """
+    sharp = sharp or strategy.FOOTBALL_SHARP_BOOK
+    out = defaultdict(list)
+
+    def add(book, market, pick, p, odds, sharp_odds):
+        ev = p * odds - 1
+        if (strategy.FOOTBALL_MIN_EV <= ev <= strategy.FOOTBALL_MAX_EV
+                and strategy.FOOTBALL_ODDS_MIN <= odds <= strategy.FOOTBALL_ODDS_MAX):
+            out[book].append({"market": market, "pick": pick, "bet_target": pick, "p_fair": p, "odds": odds,
+                              "book": book, "sharp_odds": sharp_odds, "ev": ev})
+
+    h2h = _outcomes_1x2(event)
+    if sharp in h2h:
+        names = ("HOME_WIN", "DRAW", "AWAY_WIN") if "DRAW" in h2h[sharp] else ("HOME_WIN", "AWAY_WIN")
+        fair = devig([h2h[sharp][n] for n in names], "shin" if len(names) == 3 else "power")
+        for book, sel in h2h.items():
+            if book == sharp or book in EXCHANGES:
+                continue
+            for n, p in zip(names, fair):
+                if n in sel:
+                    add(book, "h2h", n, p, sel[n], h2h[sharp][n])
+    for pt, books in _outcomes_totals(event).items():
+        if sharp not in books:
+            continue
+        fair = devig([books[sharp]["OVER"], books[sharp]["UNDER"]], "power")
+        for book, sel in books.items():
+            if book == sharp or book in EXCHANGES:
+                continue
+            for side, p in zip(("OVER", "UNDER"), fair):
+                add(book, "totals", f"{side} {pt:g}", p, sel[side], books[sharp][side])
+    return out

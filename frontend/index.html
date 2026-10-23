@@ -87,9 +87,22 @@
                     </div>
                 </section>
 
+                <!-- Günün kuponları (coupons.py) -->
                 <section class="matches-section">
                     <div class="section-title">
-                        <h2><i class="fa-solid fa-fire"></i> Hot AI Recommendations</h2>
+                        <h2><i class="fa-solid fa-ticket"></i> Günün Kuponları</h2>
+                    </div>
+                    <p style="color:var(--text-secondary); font-size:13px; margin-bottom:15px;">
+                        Futbol: Pinnacle'a göre değerli seçimlerden tek şirkette ≤ 5 maç, toplam oran ≤ 8.00. NBA: projeksiyon modelinden 3 farklı maçtan 3 oyuncu.
+                    </p>
+                    <div id="coupons-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px;">
+                        <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> Kuponlar yükleniyor...</div>
+                    </div>
+                </section>
+
+                <section class="matches-section" style="margin-top: 30px;">
+                    <div class="section-title">
+                        <h2><i class="fa-solid fa-fire"></i> Değerli Seçimler (Pinnacle'a göre)</h2>
                     </div>
                     <div class="matches-grid" id="matches-grid">
                         <div class="loading-spinner">
@@ -102,10 +115,10 @@
                 <section class="matches-section" style="margin-top: 30px;">
                     <div class="section-title" style="display:flex; align-items:center; gap:10px;">
                         <h2><i class="fa-solid fa-basketball" style="color:#f59e0b"></i> NBA Oyuncu Prop Tahminleri</h2>
-                        <span style="background: rgba(245,158,11,0.15); color:#f59e0b; padding: 3px 10px; border-radius: 20px; font-size:11px; font-weight:600;">PATLAMA RADAR 🔥</span>
+                        <span style="background: rgba(16,185,129,0.15); color:#10b981; padding: 3px 10px; border-radius: 20px; font-size:11px; font-weight:600;">PROJEKSİYON MODELİ</span>
                     </div>
                     <p style="color:var(--text-secondary); font-size:13px; margin-bottom:15px;">
-                        Son 3 maçta hattın altında kalan oyuncular — patlama bekleniyor analizi.
+                        Dakika × dakika başına üretim × rakip düzeltmesi; sadece piyasaya göre edge'i olan prop'lar (sezon başında oyuncunun bu sezon en az 3 maçı gerekir).
                     </p>
                     <div id="player-props-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px;">
                         <div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i> NBA oyuncu verileri analiz ediliyor...</div>

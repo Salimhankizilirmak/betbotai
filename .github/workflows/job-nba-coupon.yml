@@ -1,0 +1,13 @@
+name: job-nba-coupon
+# Gece öncesi 3 oyunculu NBA prop kuponu (props turunu tazeler) -> Telegram. Zamanlama: Supabase pg_cron UTC 21:40
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  coupon:
+    uses: ./.github/workflows/_run-job.yml
+    with:
+      task: nba-coupon
+      timeout: 30
+    secrets: inherit

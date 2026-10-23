@@ -95,6 +95,18 @@ SCHEMA_STATEMENTS = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_football_matches_league_date ON football_matches (league, match_date)",
     "ALTER TABLE football_matches ENABLE ROW LEVEL SECURITY",
+    # Günlük kuponlar; supabase/migrations/*_coupons.sql ile aynı
+    """
+    CREATE TABLE IF NOT EXISTS coupons (
+        id BIGSERIAL PRIMARY KEY, kind TEXT NOT NULL, coupon_date DATE NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), bookmaker TEXT, legs JSONB NOT NULL, total_odds REAL NOT NULL,
+        p_fair REAL, ev REAL, stake REAL NOT NULL DEFAULT 100, status TEXT NOT NULL DEFAULT 'PENDING',
+        profit REAL NOT NULL DEFAULT 0, resolved_at TIMESTAMPTZ, telegram_sent BOOLEAN NOT NULL DEFAULT FALSE,
+        UNIQUE (kind, coupon_date)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_coupons_status ON coupons (status, kind)",
+    "ALTER TABLE coupons ENABLE ROW LEVEL SECURITY",
     "ALTER TABLE nba_games ENABLE ROW LEVEL SECURITY",
     "ALTER TABLE nba_player_games ENABLE ROW LEVEL SECURITY",
     # Supabase Data API (anon anahtar) erişemesin; bot postgres rolüyle bağlanır, RLS'ten etkilenmez.

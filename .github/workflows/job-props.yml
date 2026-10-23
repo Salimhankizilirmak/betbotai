@@ -1,5 +1,5 @@
 name: job-props
-# NBA oyuncu prop analizi; tip-off'lardan önce günde 2 kez (UTC 15:20 ve 22:20 = TR 18:20 ve 01:20)
+# NBA oyuncu prop analizi (UTC 15:20 pg_cron; gece turu job-nba-coupon içinde çalışır)
 on:
   # Zamanlama Supabase pg_cron'dan (supabase/migrations/*_pg_cron_github_dispatch.sql);
   # GitHub 'schedule' tetikleyicisi bu repoda çalışmadığı için kaldırıldı

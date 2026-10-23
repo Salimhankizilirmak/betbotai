@@ -14,8 +14,11 @@ FOOTBALL_COUPON_MARKETS = [
     "totals_2.5",    # 2.5 Alt/Üst
     "btts",          # Karşılıklı gol var/yok
 ]
-# Avrupa kupaları, ileriye dönük takipte kalibrasyon doğrulanana kadar kupona girmez
-UEFA_IN_COUPON = os.getenv("UEFA_IN_COUPON", "false").lower() == "true"
+FOOTBALL_COUPON_MIN_LEGS = 2
+# Avrupa kupaları: kupon artık modelden değil Pinnacle'a göre değerden kurulduğu için dahil (kapatmak: false)
+UEFA_IN_COUPON = os.getenv("UEFA_IN_COUPON", "true").lower() == "true"
+# Değer olmayan günlerde Telegram'a "bugün kupon yok" mesajı gönderilsin mi
+COUPON_SEND_EMPTY = os.getenv("COUPON_SEND_EMPTY", "true").lower() == "true"
 
 # --- NBA kuponu: günde 1, farklı maçlardan 3 oyuncu ---
 NBA_PROP_LEGS = 3

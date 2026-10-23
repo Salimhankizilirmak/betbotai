@@ -10,6 +10,8 @@ Zamanlanmış işler (GitHub Actions veya Windows Görev Zamanlayıcı buradan �
     python jobs.py nba-backfill  # önceki sezonun son haftalarını biriktir (sezon başı için, tek sefer)
     python jobs.py football-ingest    # football-data.co.uk bu sezon (TR'den engelli; GitHub Actions'ta çalışır)
     python jobs.py football-backfill  # 2019-20'den bugüne tüm sezonlar (tek sefer)
+    python jobs.py football-coupon    # günün futbol kuponu (<= 5 maç, toplam oran <= 8.00) -> Telegram
+    python jobs.py nba-coupon         # gece öncesi 3 oyunculu NBA prop kuponu -> Telegram
 
 Her komut bir tur çalışır ve çıkar. Ortak durum Supabase'de tutulur (bkz. cache_store.py).
 """
@@ -39,7 +41,9 @@ async def job_resolve():
     await main.run_resolve_cycle(revalidate=True)
     pruned = await asyncio.to_thread(prune_snapshots)
     football = await asyncio.to_thread(football_data.ingest)
-    return {"ok": True, "snapshots_pruned": pruned, "football_rows": football.get("rows")}
+    import coupons
+    coupon_res = await coupons.resolve_pending()
+    return {"ok": True, "snapshots_pruned": pruned, "football_rows": football.get("rows"), "coupons": coupon_res}
 
 async def job_closing():
     from ingest.odds_snapshots import collect_closing_lines
@@ -108,9 +112,33 @@ async def job_football_backfill():
     import football_data
     return await asyncio.to_thread(football_data.ingest, football_data.all_season_codes())
 
+async def job_football_coupon():
+    """Günün futbol kuponu: değer seçimlerinden tek şirket, 2-5 maç, toplam oran <= 8.00 (coupons.py)."""
+    import coupons
+    from leagues import ANALYZED_SPORTS
+    from oddsapi_client import get_odds
+    events = []
+    for sport in ANALYZED_SPORTS:
+        if sport.startswith("soccer"):
+            data = await get_odds(sport, max_age=1800)  # kupon için en fazla 30 dk'lık oran
+            if isinstance(data, list):
+                events.extend(data)
+    coupon, stats = coupons.build_football(events)
+    return await asyncio.to_thread(coupons.publish, "football", coupon, stats)
+
+async def job_nba_coupon():
+    """Gece maçlarından önce: prop turunu tazele, model eşiklerini geçenlerden 3 farklı maçtan 3 oyuncu."""
+    import coupons
+    from ai_analyzer import NBA_PROPS_CACHE
+    props = await main.run_props_cycle(resolve_first=False)
+    coupon, stats = coupons.build_nba(NBA_PROPS_CACHE.get("data", []))
+    out = await asyncio.to_thread(coupons.publish, "nba_props", coupon, stats)
+    return {"props_cycle": props, **out}
+
 JOBS = {"analyze": job_analyze, "props": job_props, "resolve": job_resolve, "closing": job_closing, "health": job_health,
         "nba-ingest": job_nba_ingest, "nba-backfill": job_nba_backfill,
-        "football-ingest": job_football_ingest, "football-backfill": job_football_backfill}
+        "football-ingest": job_football_ingest, "football-backfill": job_football_backfill,
+        "football-coupon": job_football_coupon, "nba-coupon": job_nba_coupon}
 
 def run(name):
     t0 = time.time()

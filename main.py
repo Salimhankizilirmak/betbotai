@@ -197,6 +197,21 @@ def get_logs():
     except:
         return {"logs": "Log okuma hatası."}
 
+@app.get("/api/coupons")
+def api_coupons(limit: int = 10):
+    """Son kuponlar + sonuçlanan kuponların özeti (coupons tablosu)."""
+    from bet_manager import get_db_connection
+    with get_db_connection() as conn, conn.cursor() as cur:
+        cur.execute("SELECT * FROM coupons ORDER BY coupon_date DESC, kind LIMIT %s", (min(max(limit, 1), 50),))
+        rows = [dict(r) for r in cur.fetchall()]
+        cur.execute("""SELECT count(*) FILTER (WHERE status IN ('WON', 'LOST')) AS resolved,
+                              count(*) FILTER (WHERE status = 'WON') AS won,
+                              coalesce(sum(profit) FILTER (WHERE status IN ('WON', 'LOST')), 0) AS profit FROM coupons""")
+        summary = dict(cur.fetchone())
+    for r in rows:
+        r["coupon_date"] = str(r["coupon_date"])
+    return {"coupons": rows, "summary": summary}
+
 @app.get("/api/health")
 def health():
     from oddsapi_client import CREDIT_STATE

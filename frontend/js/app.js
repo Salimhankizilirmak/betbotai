@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchMatches(true);
     fetchBetHistory(); 
     fetchPlayerProps(); 
+    fetchCoupons();
     fetchLogs();
     setInterval(fetchLogs, 2000);
 
@@ -39,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (targetId === 'page-live') {
                 fetchMatches(true);
                 fetchPlayerProps();
+                fetchCoupons();
             } else if (targetId === 'page-upcoming') {
                 fetchMatches(false);
             }
@@ -550,5 +552,66 @@ async function fetchPlayerProps() {
         }).join("");
     } catch(e) {
         if (grid) grid.innerHTML = "<div class='glass-panel' style='padding:20px; color:var(--text-secondary); grid-column:1/-1; text-align:center;'><i class='fa-solid fa-triangle-exclamation'></i> Oyuncu prop verisi yuklenemedi: " + e.message + "</div>";
+    }
+}
+
+
+// ---------------------------------------------------------------- Günün kuponları (/api/coupons)
+function escapeHtmlText(t) {
+    return String(t == null ? '' : t).replace(/[&<>"']/g, function(c) {
+        return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+    });
+}
+
+function couponLegLabel(l) {
+    if (l.player) {
+        const stat = {PTS: 'Sayı', REB: 'Ribaund', AST: 'Asist'}[l.stat] || l.stat;
+        return l.player + ' — ' + stat + ' ' + l.line + ' ' + (l.side === 'OVER' ? 'Üst' : 'Alt');
+    }
+    const map = {HOME_WIN: '1 (Ev sahibi)', DRAW: 'X (Beraberlik)', AWAY_WIN: '2 (Deplasman)'};
+    if (map[l.pick]) return map[l.pick];
+    const parts = String(l.pick).split(' ');
+    return parts[1] + ' ' + (parts[0] === 'OVER' ? 'Üst' : 'Alt');
+}
+
+async function fetchCoupons() {
+    const grid = document.getElementById('coupons-grid');
+    if (!grid) return;
+    try {
+        const res = await fetch(API_BASE_URL + '/api/coupons?t=' + Date.now());
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const coupons = data.coupons || [];
+        if (coupons.length === 0) {
+            grid.innerHTML = "<div class='glass-panel' style='padding:20px; color:var(--text-secondary); grid-column:1/-1; text-align:center;'>Henüz kupon yok. Futbol kuponu her gün 12:00'de, NBA kuponu 00:40'ta (TR) hazırlanır; değer yoksa kupon çıkmaz.</div>";
+            return;
+        }
+        const statusColor = {WON: '#10b981', LOST: '#ef4444', VOID: '#94a3b8', PENDING: '#f59e0b'};
+        const legMark = {WON: '✅', LOST: '❌', VOID: '⚪'};
+        grid.innerHTML = coupons.map(function(c) {
+            const col = statusColor[c.status] || '#94a3b8';
+            const title = c.kind === 'football' ? '⚽ Futbol kuponu' : '🏀 NBA kuponu (3 oyuncu)';
+            const legs = (c.legs || []).map(function(l) {
+                const t = new Date(l.commence_time).toLocaleString('tr-TR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'});
+                return "<div style='padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05); font-size:12px;'>" +
+                    "<div style='color:var(--text-secondary);'>" + (legMark[l.result] || '⏳') + ' ' + t + ' · ' + escapeHtmlText(l.home_team) + ' - ' + escapeHtmlText(l.away_team) + "</div>" +
+                    "<div style='display:flex; justify-content:space-between;'><span style='font-weight:600;'>" + escapeHtmlText(couponLegLabel(l)) + "</span><span>@ " + Number(l.odds).toFixed(2) + "</span></div></div>";
+            }).join('');
+            return "<div class='glass-panel' style='padding:16px; border-radius:16px; border-left:4px solid " + col + ";'>" +
+                "<div style='display:flex; justify-content:space-between; margin-bottom:6px;'><span style='font-weight:700;'>" + title + "</span><span style='color:" + col + "; font-weight:700; font-size:12px;'>" + c.status + "</span></div>" +
+                "<div style='font-size:11px; color:var(--text-secondary); margin-bottom:8px;'>" + c.coupon_date + ' · ' + escapeHtmlText(c.bookmaker) + "</div>" + legs +
+                "<div style='display:flex; justify-content:space-between; margin-top:10px; font-size:13px;'>" +
+                "<span>Toplam oran <b>" + Number(c.total_odds).toFixed(2) + "</b></span>" +
+                "<span>Tutma olasılığı <b>%" + (Number(c.p_fair || 0) * 100).toFixed(1) + "</b></span>" +
+                "<span>EV <b>" + (Number(c.ev || 0) * 100).toFixed(1) + "%</b></span></div>" +
+                (c.status !== 'PENDING' ? "<div style='margin-top:6px; font-size:12px; color:" + col + ";'>Kâr/Zarar: " + Number(c.profit).toFixed(2) + " BB</div>" : '') +
+                "</div>";
+        }).join('');
+        const s = data.summary || {};
+        if (s.resolved) {
+            grid.insertAdjacentHTML('afterbegin', "<div class='glass-panel' style='padding:12px 16px; grid-column:1/-1; font-size:12px; color:var(--text-secondary);'>Sonuçlanan kupon: " + s.resolved + ' · tutan: ' + s.won + ' · toplam kâr/zarar: ' + Number(s.profit).toFixed(2) + ' BB</div>');
+        }
+    } catch (e) {
+        grid.innerHTML = "<div class='glass-panel' style='padding:20px; color:var(--text-secondary); grid-column:1/-1;'>Kuponlar yüklenemedi: " + escapeHtmlText(e.message) + "</div>";
     }
 }

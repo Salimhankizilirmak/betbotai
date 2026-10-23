@@ -1,0 +1,13 @@
+name: job-football-coupon
+# Günün futbol kuponu (Pinnacle'a göre değer, tek şirket, <= 5 maç, toplam oran <= 8.00) -> Telegram. Zamanlama: Supabase pg_cron UTC 09:00
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  coupon:
+    uses: ./.github/workflows/_run-job.yml
+    with:
+      task: football-coupon
+      timeout: 30
+    secrets: inherit
