@@ -55,6 +55,18 @@ def _nba_stats_check():
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:150]}", "secs": round(time.time() - t0, 1)}
 
+def _espn_check():
+    """ESPN NBA API (stats.nba.com'a alternatif) bu makineden erişilebilir mi?"""
+    import httpx
+    t0 = time.time()
+    try:
+        r = httpx.get("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard", timeout=15)
+        d = r.json() if r.status_code == 200 else {}
+        return {"ok": r.status_code == 200, "status": r.status_code, "events": len(d.get("events", [])),
+                "secs": round(time.time() - t0, 1)}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:150]}", "secs": round(time.time() - t0, 1)}
+
 async def job_health():
     import bet_manager
     from oddsapi_client import get_sports, CREDIT_STATE
@@ -63,8 +75,9 @@ async def job_health():
                     "(SELECT count(*) FROM app_cache) AS cache_rows")
         counts = dict(cur.fetchone())
     await get_sports()  # /sports kota harcamaz, ama kalan kredi başlığını döner
-    nba = await asyncio.to_thread(_nba_stats_check)
-    return {"db": counts, "odds_api_credits_remaining": CREDIT_STATE.get("remaining"), "nba_stats_api": nba}
+    nba, espn = await asyncio.gather(asyncio.to_thread(_nba_stats_check), asyncio.to_thread(_espn_check))
+    return {"db": counts, "odds_api_credits_remaining": CREDIT_STATE.get("remaining"), "nba_stats_api": nba,
+            "espn_api": espn}
 
 JOBS = {"analyze": job_analyze, "props": job_props, "resolve": job_resolve, "closing": job_closing, "health": job_health}
 
