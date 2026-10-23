@@ -1,0 +1,15 @@
+{
+  "version": "football-dc-v1-20261023",
+  "xi": 0.0035,
+  "kappa": 5.0,
+  "window_days": 1095,
+  "blend_w": {
+    "1x2": 0.0,
+    "ou25": 0.0
+  },
+  "fitted_on": {
+    "valid_seasons": [
+      "2223"
+    ]
+  }
+}
