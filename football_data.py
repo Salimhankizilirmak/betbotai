@@ -111,3 +111,38 @@ def load_matches(leagues=None):
         cur.execute("SELECT * FROM football_matches WHERE fthg IS NOT NULL AND league = ANY(%s) ORDER BY match_date",
                     (leagues or MODEL_LEAGUES,))
         return pd.DataFrame([dict(r) for r in cur.fetchall()])
+
+# ---------------------------------------------------------------- takım formu (LLM gerekçesi için)
+_form_cache = {"df": None, "ts": 0.0}
+
+def _recent_matches(max_age=3600):
+    import time
+    if _form_cache["df"] is None or time.time() - _form_cache["ts"] > max_age:
+        from bet_manager import get_db_connection
+        with get_db_connection() as conn, conn.cursor() as cur:
+            cur.execute("""SELECT league, match_date, home_team, away_team, fthg, ftag, home_sot, away_sot
+                           FROM football_matches WHERE fthg IS NOT NULL AND match_date > NOW() - INTERVAL '400 days'""")
+            _form_cache.update(df=pd.DataFrame([dict(r) for r in cur.fetchall()]), ts=time.time())
+    return _form_cache["df"]
+
+def team_form(team_name, league=None, n=5):
+    """Son n maç: 'G-B-M', attığı/yediği ortalama. Takım bulunamazsa None. (Odds API adı -> football-data adı)"""
+    from data_loader import resolve_team_name
+    df = _recent_matches()
+    if df is None or df.empty:
+        return None
+    pool = df[df["league"] == league] if league else df
+    teams = pd.concat([pool["home_team"], pool["away_team"]]).unique()
+    team = resolve_team_name(team_name, teams, min_score=0.6 if league else 0.75)
+    if not team:
+        return None
+    m = pool[(pool["home_team"] == team) | (pool["away_team"] == team)].sort_values("match_date").tail(n)
+    if m.empty:
+        return None
+    res, gf, ga = [], 0, 0
+    for r in m.itertuples():
+        f, a = (r.fthg, r.ftag) if r.home_team == team else (r.ftag, r.fthg)
+        gf, ga = gf + f, ga + a
+        res.append("G" if f > a else "B" if f == a else "M")
+    k = len(m)
+    return f"{team}: son {k} maç {'-'.join(res)}, maç başı atılan {gf / k:.1f} / yenen {ga / k:.1f}"

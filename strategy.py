@@ -42,3 +42,11 @@ PROP_ODDS_MAX = 3.00
 PROP_MIN_SEASON_GAMES = int(os.getenv("PROP_MIN_SEASON_GAMES", "3"))  # oyuncunun BU sezonki maç sayısı
 PROP_MARKET_SHRINK = float(os.getenv("PROP_MARKET_SHRINK", "0.5"))   # p = piyasa + λ·(model - piyasa)
 PROP_MAX_RAW_EDGE = float(os.getenv("PROP_MAX_RAW_EDGE", "0.20"))    # ham fark bundan büyükse eksik bilgi var say
+
+# --- Futbol: keskin piyasaya (Pinnacle) göre değer (football_value.py; backtest: reports/football_backtest.json) ---
+FOOTBALL_SHARP_BOOK = "pinnacle"
+FOOTBALL_MIN_EV = float(os.getenv("FOOTBALL_MIN_EV", "0.02"))
+FOOTBALL_ODDS_MIN = 1.30
+FOOTBALL_ODDS_MAX = 4.00
+# Çok yüksek EV genelde bayat/hatalı oran demektir (bir şirket fiyatı güncellememiş); bahis alınmaz
+FOOTBALL_MAX_EV = float(os.getenv("FOOTBALL_MAX_EV", "0.10"))

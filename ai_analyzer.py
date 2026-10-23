@@ -562,3 +562,46 @@ async def analyze_odds(odds_data):
         results.append(res)
         await asyncio.sleep(10) # Gemini 429 hatalarını azaltmak için bekleme ekle
     return results
+
+
+async def explain_value_pick(match, analysis, timeout=45):
+    """
+    Futbol değer bahsi için kısa Türkçe gerekçe (Telegram/panel). Karar football_value.py'de verilir;
+    LLM olasılık üretmez, rakamları değiştiremez. Başarısız olursa None (özet metin yeterli).
+    """
+    home, away = match.get("home_team", ""), match.get("away_team", "")
+    league_key = ODDS_TO_STATS_MAP.get(match.get("sport_key", ""))
+    try:
+        import football_data
+        forms = await asyncio.to_thread(lambda: [football_data.team_form(t, league_key) for t in (home, away)])
+        stats = " | ".join(f for f in forms if f) or "yok"
+    except Exception:
+        stats = "yok"
+    prompt = (
+        "Sen bir futbol bahis analistisin. SADECE TÜRKÇE yaz, en fazla 3 kısa cümle.\n"
+        f"Maç: {home} - {away}\n"
+        f"Karar (değiştirme): {analysis['recommendation']} @ {analysis['odds_value']:.2f} ({analysis['bookmaker']}).\n"
+        f"Gerekçe verisi: Pinnacle marjsız olasılığı %{analysis['p_fair'] * 100:.1f}, beklenen değer "
+        f"{analysis['ev'] * 100:+.1f}%. Takım verisi: {stats}\n"
+        "Kurallar: Yeni olasılık veya yüzde uydurma; 'garanti', 'kesin' gibi ifadeler kullanma. "
+        "Değer, bu şirketin fiyatının keskin piyasanın (Pinnacle) adil fiyatından yüksek olmasından gelir; bunu belirt. "
+        "Takım verisi varsa 1-2 somut rakam kullan; 'yok' ise veriden hiç bahsetme."
+    )
+    try:
+        key = gemini_api_manager.get_current_key()
+        if key:
+            client = genai.Client(api_key=key)
+            resp = await asyncio.wait_for(client.aio.models.generate_content(model=AI_MODELS[0], contents=prompt), timeout)
+            if resp and resp.text:
+                return resp.text.strip()[:700]
+    except Exception as e:
+        logging.warning(f"Gemini gerekçe hatası: {str(e)[:120]}")
+        if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+            gemini_api_manager.rotate_key()
+    try:
+        text = await asyncio.wait_for(analyze_with_fallback(prompt), timeout)
+        if text and "başarısız" not in text:
+            return text.strip()[:700]
+    except Exception as e:
+        logging.warning(f"Fallback gerekçe hatası: {str(e)[:120]}")
+    return None
