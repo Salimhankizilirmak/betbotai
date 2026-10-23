@@ -21,3 +21,8 @@ error_details.txt
 test_results.txt
 models_list.txt
 player_props_debug.json
+
+# Vercel CLI (proje bağlantısı ve OIDC token'lı .env.local)
+.vercel
+.env*
+!.env.example
