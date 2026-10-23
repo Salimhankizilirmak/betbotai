@@ -1,0 +1,15 @@
+name: job-resolve
+# Bekleyen bahisleri sonuçlandır + son 3 günün sonuçlarını yeniden doğrula (4 saatte bir, UTC)
+on:
+  schedule:
+    - cron: "35 */4 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  resolve:
+    uses: ./.github/workflows/_run-job.yml
+    with:
+      task: resolve
+      timeout: 30
+    secrets: inherit

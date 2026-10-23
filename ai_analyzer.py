@@ -51,28 +51,35 @@ OPENAI_MODEL = "gpt-4o-mini"
 _last_gemini_call_time = 0.0
 GEMINI_MIN_INTERVAL = 15  # Gemini çağrıları arası minimum 15 saniye (hızlandırmak için düşürüldü)
 
-# Cache Ayarları
-CACHE_FILE = os.path.join("data", "ai_cache.json")
+# Cache Ayarları: analizler Supabase app_cache tablosunda tutulur (Vercel ve GitHub Actions ortak kullanır)
+import cache_store
+AI_CACHE_NAMESPACE = "ai_analysis"
+NBA_PROPS_NAMESPACE = "nba_props"
 CACHE_TTL = 172800  # 48 hours for Free Tier stability
 
 def load_cache():
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            logging.error(f"Error loading AI cache: {e}")
-            return {}
-    return {}
+    return cache_store.get_namespace(AI_CACHE_NAMESPACE, max_age_seconds=CACHE_TTL)
 
-def save_cache(cache_data):
-    try:
-        if not os.path.exists("data"):
-            os.makedirs("data")
-        with open(CACHE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(cache_data, f, ensure_ascii=False)
-    except Exception as e:
-        logging.error(f"Failed to save AI cache: {e}")
+def reload_ai_cache():
+    """Başka bir süreç (ör. GitHub Actions) yeni analiz yazmış olabilir; bellek içi kopyayı tazeler."""
+    fresh = load_cache()
+    AI_CACHE.clear()
+    AI_CACHE.update(fresh)
+    return AI_CACHE
+
+def save_cache_entry(event_id, analysis):
+    cache_store.put(AI_CACHE_NAMESPACE, event_id, analysis)
+
+def save_nba_props(recs):
+    NBA_PROPS_CACHE["data"] = recs
+    NBA_PROPS_CACHE["last_updated"] = time.time()
+    cache_store.put(NBA_PROPS_NAMESPACE, "latest", NBA_PROPS_CACHE)
+
+def reload_nba_props():
+    value, _ = cache_store.get(NBA_PROPS_NAMESPACE, "latest")
+    if value:
+        NBA_PROPS_CACHE.update(value)
+    return NBA_PROPS_CACHE
 
 AI_CACHE = load_cache()
 
@@ -542,7 +549,7 @@ async def analyze_event(event):
             "_cached_at": time.time()
         })
         AI_CACHE[event_id] = risk_info
-        save_cache(AI_CACHE)
+        save_cache_entry(event_id, risk_info)
         
     return risk_info
 

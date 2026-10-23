@@ -45,7 +45,7 @@ class ApiKeyManager:
             
             # Key değiştiyse logla
             if old_key != new_key:
-                logging.warning(f"🔄 Rotating {self.name} Key! Changed from {old_key[:6]}... to {new_key[:6]}...")
+                logging.warning(f"🔄 Rotating {self.name} key -> #{self.current_index + 1}/{len(self.keys)}")
             
             return new_key
 

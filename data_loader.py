@@ -8,10 +8,9 @@ import asyncio
 import unicodedata
 from difflib import SequenceMatcher
 from seasons import football_season_code
+from settings import DATA_DIR, ensure_dir
 
-DATA_DIR = "data"
-if not os.path.exists(DATA_DIR):
-    os.makedirs(DATA_DIR)
+ensure_dir(DATA_DIR)
 
 # football-data.co.uk sezonluk dosyaları: mmz4281/<sezon kodu>/<dosya>
 # Not: Site Türkiye'de BTK tarafından engelli. TR ağlarında HTTPS "self-signed" hatası verir,

@@ -1,0 +1,23 @@
+# Vercel fonksiyon paketine girmesin (Python için tree-shaking yok; her dosya pakete eklenir)
+.env
+.env.*
+.venv/
+venv/
+__pycache__/
+data/
+logs/
+supabase/
+.github/
+test_*.py
+*.db
+*.log
+# Eski tek seferlik debug/bakım script'leri
+check_*.py
+db_check.py
+debug_crash.py
+diag_pending.py
+dump*.py
+find_dbs.py
+migrate.py
+resolve_yesterday_bets.py
+trigger_revalidation.py

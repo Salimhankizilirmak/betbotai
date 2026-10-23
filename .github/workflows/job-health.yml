@@ -1,0 +1,13 @@
+name: job-health
+# Elle çalıştırılır: Supabase bağlantısı ve Odds API kalan kredisi (kota harcamaz)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  health:
+    uses: ./.github/workflows/_run-job.yml
+    with:
+      task: health
+      timeout: 10
+    secrets: inherit

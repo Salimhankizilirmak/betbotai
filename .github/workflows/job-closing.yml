@@ -1,0 +1,15 @@
+name: job-closing
+# Kapanış oranları (CLV/backtest için). 10 dakikada bir bakar; sadece başlamak üzere maç varsa kredi harcar.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  closing:
+    uses: ./.github/workflows/_run-job.yml
+    with:
+      task: closing
+      timeout: 10
+    secrets: inherit

@@ -1,0 +1,53 @@
+# Ortak iş: python jobs.py <task>. Zamanlanmış workflow'lar bunu çağırır (secrets: inherit).
+name: run-job
+
+on:
+  workflow_call:
+    inputs:
+      task:
+        required: true
+        type: string
+      timeout:
+        required: false
+        type: number
+        default: 30
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout }}
+    # Aynı iş üst üste binmesin (cron gecikmelerinde önceki tur hâlâ çalışıyor olabilir)
+    concurrency:
+      group: betbot-${{ inputs.task }}
+      cancel-in-progress: false
+    env:
+      TZ: Europe/Istanbul
+      RUN_BACKGROUND_LOOPS: "false"
+      # GitHub cron'ları 5-15 dk gecikebilir; kapanış penceresi buna göre geniş tutulur
+      CLOSING_WINDOW_MINUTES: "25"
+      POST_TO_X: ${{ vars.POST_TO_X || 'false' }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      ODDS_API_KEYS: ${{ secrets.ODDS_API_KEYS }}
+      GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_IDS: ${{ secrets.TELEGRAM_CHAT_IDS }}
+      X_CONSUMER_KEY: ${{ secrets.X_CONSUMER_KEY }}
+      X_CONSUMER_SECRET: ${{ secrets.X_CONSUMER_SECRET }}
+      X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+      X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: python jobs.py ${{ inputs.task }}
+        run: python jobs.py ${{ inputs.task }}

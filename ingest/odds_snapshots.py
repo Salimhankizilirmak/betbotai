@@ -114,6 +114,37 @@ async def record_odds_response(events, kind="regular"):
         return 0
     return await asyncio.to_thread(save_rows, rows)
 
+PRUNE_SQL = """
+    DELETE FROM odds_snapshots s
+    USING (
+        SELECT id, row_number() OVER (
+            PARTITION BY event_id, bookmaker, market, selection, player, point ORDER BY captured_at
+        ) AS rn
+        FROM odds_snapshots
+        WHERE snapshot_kind = 'regular' AND commence_time < NOW() - make_interval(days => %s)
+    ) x
+    WHERE s.id = x.id AND x.rn > 1
+"""
+
+def prune_snapshots(older_than_days=2):
+    """
+    Başlamasının üzerinden older_than_days geçmiş maçlarda her oran için sadece ilk (açılış) 'regular'
+    snapshot'ı ve 'closing' snapshot'ları tutar; aradaki hareketleri siler (Supabase ücretsiz kotası için).
+    """
+    try:
+        from bet_manager import get_db_connection
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(PRUNE_SQL, (older_than_days,))
+                n = cur.rowcount
+            conn.commit()
+        if n:
+            logging.info(f"🧹 odds_snapshots: {n} ara snapshot silindi")
+        return n
+    except Exception as e:
+        logging.error(f"odds_snapshots prune hatası: {e}")
+        return 0
+
 def events_closing_soon(events, now=None, window_minutes=None):
     """Başlamasına window_minutes veya daha az kalmış, henüz başlamamış maçlar."""
     now = now or datetime.now(timezone.utc)

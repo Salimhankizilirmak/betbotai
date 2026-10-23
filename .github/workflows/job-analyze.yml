@@ -1,0 +1,15 @@
+name: job-analyze
+# Maç oranları + yeni maçların AI analizi + sanal bahis (3 saatte bir, UTC)
+on:
+  schedule:
+    - cron: "5 */3 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  analyze:
+    uses: ./.github/workflows/_run-job.yml
+    with:
+      task: analyze
+      timeout: 45
+    secrets: inherit

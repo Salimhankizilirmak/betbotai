@@ -1,0 +1,15 @@
+name: job-props
+# NBA oyuncu prop analizi; tip-off'lardan önce günde 2 kez (UTC 15:20 ve 22:20 = TR 18:20 ve 01:20)
+on:
+  schedule:
+    - cron: "20 15,22 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  props:
+    uses: ./.github/workflows/_run-job.yml
+    with:
+      task: props
+      timeout: 40
+    secrets: inherit

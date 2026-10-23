@@ -13,8 +13,10 @@ import re
 import json
 import time
 from x_client import post_tweet
+import settings
 
-REVALIDATION_CACHE_FILE = os.path.join("data", "revalidation_status.json")
+# Revalidation durumu (bahis id -> son kontrol zamanı) Supabase app_cache tablosunda tutulur
+REVALIDATION_CACHE_KEY = ("revalidation", "status")
 
 
 # Global DB Lock for writes
@@ -46,7 +48,9 @@ def send_telegram_message(text: str):
         except Exception as e:
             logging.error(f"Telegram execution failed for {chat_id}: {e}")
             
-    # X (Twitter) Gönderimi
+    # X (Twitter) Gönderimi: herkese açık olduğu için sadece POST_TO_X=true ise
+    if not settings.POST_TO_X:
+        return
     try:
         # Telegram HTML taglerini temizle (<b>, <i>, </b>, </i> vb.)
         clean_text = re.sub(r'<[^>]+>', '', text)
@@ -97,8 +101,9 @@ def init_db():
     except Exception as e:
         logging.error(f"Database init error: {e}")
 
-# Uygulama açılışında DB kontrolü/kurulumu
-init_db()
+# Uygulama açılışında DB kontrolü/kurulumu (Vercel'de kapalı; şema supabase/migrations ile kurulur)
+if settings.INIT_DB_ON_IMPORT:
+    init_db()
 
 @contextlib.contextmanager
 def get_db_connection():
@@ -506,13 +511,9 @@ async def revalidate_resolved_bets():
     now = time.time()
     
     # Cache yükle
-    reval_cache = {}
-    if os.path.exists(REVALIDATION_CACHE_FILE):
-        try:
-            with open(REVALIDATION_CACHE_FILE, 'r') as f:
-                reval_cache = json.load(f)
-        except:
-            pass
+    import cache_store
+    reval_cache, _ = cache_store.get(*REVALIDATION_CACHE_KEY)
+    reval_cache = reval_cache or {}
 
     try:
         with get_db_connection() as conn:
@@ -735,8 +736,7 @@ async def revalidate_resolved_bets():
                     continue
             
         # Cache'i kaydet
-        with open(REVALIDATION_CACHE_FILE, 'w') as f:
-            json.dump(reval_cache, f)
+        cache_store.put(*REVALIDATION_CACHE_KEY, reval_cache)
 
         logging.info(f"✅ REVALIDATION TAMAMLANDI: {corrected} düzeltildi, {reverted} PENDING geri alındı.")
     except Exception as e:

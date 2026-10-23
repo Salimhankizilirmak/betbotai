@@ -45,7 +45,7 @@ async def _get_with_rotation(path, params, label):
             response = await client.get(f"{BASE_URL}{path}", params={"apiKey": api_key, **params}, timeout=15.0)
 
             if response.status_code in [401, 403, 429]:
-                logging.warning(f"{label}: API Key {api_key[:4]}... failed ({response.status_code}). Rotating...")
+                logging.warning(f"{label}: Odds API key failed ({response.status_code}). Rotating...")
                 odds_api_manager.rotate_key()
                 await asyncio.sleep(1) # Small delay before retry
                 continue
@@ -65,19 +65,44 @@ async def get_sports():
         CACHE[cache_key] = {"data": data, "timestamp": time.time()}
     return data
 
-async def get_odds(sport_key="upcoming", region="eu", markets="h2h,totals,spreads", force_refresh=False, record=True):
+# Kullanılan marketler; kredi maliyeti = market sayısı x bölge sayısı (spreads kullanılmadığı için çıkarıldı)
+DEFAULT_MARKETS = "h2h,totals"
+SHARED_CACHE_NAMESPACE = "odds_listing"
+
+async def warm_cache_from_shared(max_age=CACHE_TTL):
+    """Ortak önbellekteki tüm oran listelerini tek sorguda belleğe alır (panel ilk açılışı için)."""
+    import cache_store
+    shared = await asyncio.to_thread(cache_store.get_namespace, SHARED_CACHE_NAMESPACE, max_age)
+    now = time.time()
+    for key, data in shared.items():
+        if key not in CACHE:
+            # Yaş bilinmiyor ama max_age içinde; bu süreç için taze say
+            CACHE[key] = {"data": data, "timestamp": now}
+    return len(shared)
+
+async def get_odds(sport_key="upcoming", region="eu", markets=DEFAULT_MARKETS, force_refresh=False, record=True,
+                   max_age=CACHE_TTL):
     """
     force_refresh: önbelleği atlar (kapanış oranı için).
     record: taze çekilen oranları odds_snapshots tablosuna (sadece değişenleri) kaydeder.
+    max_age: önbellek ne kadar eski olabilir (sn). Önce bellek, sonra Supabase'deki ortak önbellek
+             denenir; böylece Vercel ve GitHub Actions aynı listeyi kredi harcamadan paylaşır.
     """
+    import cache_store
     cache_key = f"odds_{sport_key}_{region}_{markets}"
-    if not force_refresh and cache_key in CACHE and time.time() - CACHE[cache_key]["timestamp"] < CACHE_TTL:
-        return CACHE[cache_key]["data"]
+    if not force_refresh:
+        if cache_key in CACHE and time.time() - CACHE[cache_key]["timestamp"] < max_age:
+            return CACHE[cache_key]["data"]
+        shared, ts = await asyncio.to_thread(cache_store.get, SHARED_CACHE_NAMESPACE, cache_key, max_age)
+        if shared is not None:
+            CACHE[cache_key] = {"data": shared, "timestamp": ts}
+            return shared
 
     params = {"regions": region, "markets": markets, "oddsFormat": "decimal"}
     data = await _get_with_rotation(f"/sports/{sport_key}/odds", params, "get_odds")
     if data is not None:
         CACHE[cache_key] = {"data": data, "timestamp": time.time()}
+        await asyncio.to_thread(cache_store.put, SHARED_CACHE_NAMESPACE, cache_key, data)
         if record and sport_key != "upcoming":
             from ingest.odds_snapshots import record_odds_response
             await record_odds_response(data, kind="regular")

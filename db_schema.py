@@ -52,6 +52,17 @@ SCHEMA_STATEMENTS = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_predictions_event ON predictions (event_id, market)",
     "CREATE INDEX IF NOT EXISTS idx_predictions_model ON predictions (model_name, model_version, created_at)",
+    """
+    CREATE TABLE IF NOT EXISTS app_cache (
+        namespace TEXT NOT NULL,
+        key TEXT NOT NULL,
+        value JSONB NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (namespace, key)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_app_cache_updated ON app_cache (namespace, updated_at)",
+    "ALTER TABLE app_cache ENABLE ROW LEVEL SECURITY",
     # Supabase Data API (anon anahtar) erişemesin; bot postgres rolüyle bağlanır, RLS'ten etkilenmez.
     # supabase/migrations/*_initial_schema.sql ile aynı.
     "ALTER TABLE bets ENABLE ROW LEVEL SECURITY",
