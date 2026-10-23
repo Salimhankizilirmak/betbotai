@@ -30,3 +30,15 @@ CLOSING_WINDOW_MINUTES = int(os.getenv("CLOSING_WINDOW_MINUTES", "15"))
 # Kapanış toplamada futbol için sadece kuponda kullanılan marketler çekilir (kredi = market x bölge)
 CLOSING_FOOTBALL_MARKETS = "h2h,totals"
 PROPS_REGION = "us"
+
+# --- NBA prop bahis eşikleri (models/nba_props_model.py olasılıkları vs marjsız piyasa) ---
+PROP_MIN_EDGE = float(os.getenv("PROP_MIN_EDGE", "0.04"))   # model olasılığı - piyasa olasılığı
+PROP_MIN_EV = float(os.getenv("PROP_MIN_EV", "0.03"))       # p * oran - 1
+PROP_MIN_GAMES = 5
+PROP_MIN_MINUTES = 20.0
+PROP_ODDS_MIN = 1.50
+PROP_ODDS_MAX = 3.00
+# Sezon başı / rol değişikliği koruması: model piyasanın bildiği bilgileri (sakatlık, takas, rol) bilmez
+PROP_MIN_SEASON_GAMES = int(os.getenv("PROP_MIN_SEASON_GAMES", "3"))  # oyuncunun BU sezonki maç sayısı
+PROP_MARKET_SHRINK = float(os.getenv("PROP_MARKET_SHRINK", "0.5"))   # p = piyasa + λ·(model - piyasa)
+PROP_MAX_RAW_EDGE = float(os.getenv("PROP_MAX_RAW_EDGE", "0.20"))    # ham fark bundan büyükse eksik bilgi var say

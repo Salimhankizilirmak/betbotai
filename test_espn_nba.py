@@ -59,6 +59,15 @@ def test_parse_boxscore():
     assert dnp["dnp"] and dnp["pts"] is None and dnp["dnp_reason"] == "COACH'S DECISION"
 
 
+def test_parse_boxscore_skips_athletes_without_id():
+    import copy
+    summary = copy.deepcopy(SUMMARY)
+    summary["boxscore"]["players"][0]["statistics"][0]["athletes"].append(
+        {"starter": False, "didNotPlay": True, "reason": "COACH'S DECISION", "athlete": {}, "stats": []})
+    g = espn_nba.parse_scoreboard(SCOREBOARD, date(2026, 10, 22))[0]
+    assert len(espn_nba.parse_boxscore(summary, g)) == 2
+
+
 def test_team_match_no_same_city_confusion():
     assert nba_data.team_match("Los Angeles Clippers", "LA Clippers")
     assert nba_data.team_match("Portland Trail Blazers", "Portland Trail Blazers")

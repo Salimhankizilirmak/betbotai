@@ -507,7 +507,7 @@ async function fetchPlayerProps() {
         const props = await res.json();
         
         if (!props || props.length === 0) {
-            grid.innerHTML = "<div class='glass-panel' style='padding:20px; color:var(--text-secondary); grid-column:1/-1; text-align:center;'><i class='fa-solid fa-magnifying-glass'></i> Henüz patlama sinyali taranmadı veya bulunamadı.<br><small>Arka plandaki analiz döngüsü yaklaşık 3-5 dakika sürebilir. Yeni verileri görmek için sayfayı yenile butonunu kullanın.</small></div>";
+            grid.innerHTML = "<div class='glass-panel' style='padding:20px; color:var(--text-secondary); grid-column:1/-1; text-align:center;'><i class='fa-solid fa-magnifying-glass'></i> Henüz edge'li prop bulunamadı (model piyasadan anlamlı farklı görmüyorsa öneri çıkmaz).<br><small>Arka plandaki analiz döngüsü yaklaşık 3-5 dakika sürebilir. Yeni verileri görmek için sayfayı yenile butonunu kullanın.</small></div>";
             return;
         }
         const statLabels = { player_points: "Puan", player_rebounds: "Ribaund", player_assists: "Asist" };
@@ -516,21 +516,21 @@ async function fetchPlayerProps() {
             const col = conf >= 80 ? "#10b981" : conf >= 70 ? "#f59e0b" : "#94a3b8";
             const statLabel = statLabels[p.market] || p.stat;
             return "<div class='glass-panel' style='padding:18px; border-radius:16px; border-left:4px solid " + col + "; position:relative;'>" +
-                "<div style='position:absolute; top:10px; right:12px; background:rgba(245,158,11,0.15); color:#f59e0b; padding:2px 8px; border-radius:12px; font-size:10px; font-weight:700;'>PATLAMA</div>" +
+                "<div style='position:absolute; top:10px; right:12px; background:rgba(16,185,129,0.15); color:#10b981; padding:2px 8px; border-radius:12px; font-size:10px; font-weight:700;'>MODEL</div>" +
                 "<div style='font-size:11px; color:var(--text-secondary); margin-bottom:4px;'>" + p.home_team + " vs " + p.away_team + "</div>" +
                 "<div style='font-size:18px; font-weight:700; margin-bottom:4px;'>" + p.player + "</div>" +
-                "<div style='font-size:14px; color:" + col + "; font-weight:600; margin-bottom:12px;'>OVER " + p.line + " " + statLabel + " @ " + (p.over_odds||0).toFixed(2) + "</div>" +
+                "<div style='font-size:14px; color:" + col + "; font-weight:600; margin-bottom:12px;'>" + (p.side === 'UNDER' ? 'ALT ' : 'ÜST ') + p.line + " " + statLabel + " @ " + (p.odds || p.over_odds || 0).toFixed(2) + "</div>" +
                 "<div style='background:rgba(255,255,255,0.04); border-radius:8px; padding:10px; margin-bottom:10px; font-size:12px;'>" +
-                "<div style='display:flex; justify-content:space-between; margin-bottom:5px;'><span style='color:var(--text-secondary);'>Hat</span><span>" + p.line + " " + statLabel + "</span></div>" +
-                "<div style='display:flex; justify-content:space-between; margin-bottom:5px;'><span style='color:var(--text-secondary);'>Son 3 ort.</span><span style='color:#ef4444; font-weight:600;'>" + (p.avg_last_n||"N/A") + " " + statLabel + "</span></div>" +
-                "<div style='display:flex; justify-content:space-between;'><span style='color:var(--text-secondary);'>Eksik</span><span style='color:#f59e0b; font-weight:700;'>-" + (p.deficit||0) + " " + statLabel + "</span></div>" +
+                "<div style='display:flex; justify-content:space-between; margin-bottom:5px;'><span style='color:var(--text-secondary);'>Projeksiyon</span><span style='font-weight:600;'>" + (p.mu != null ? p.mu.toFixed(1) : "N/A") + " " + statLabel + " (" + (p.min_proj != null ? p.min_proj.toFixed(0) : "?") + " dk)</span></div>" +
+                "<div style='display:flex; justify-content:space-between; margin-bottom:5px;'><span style='color:var(--text-secondary);'>Model / Piyasa</span><span>%" + Math.round((p.p_model||0)*100) + " / %" + Math.round((p.p_fair||0)*100) + "</span></div>" +
+                "<div style='display:flex; justify-content:space-between;'><span style='color:var(--text-secondary);'>Edge</span><span style='color:#10b981; font-weight:700;'>+" + ((p.edge||0)*100).toFixed(1) + " puan</span></div>" +
                 "<div style='border-top:1px solid rgba(255,255,255,0.05); margin-top:8px; padding-top:8px; display:flex; flex-direction:column; gap:4px;'>" +
                 "<div style='display:flex; justify-content:space-between; font-size:10px; color:var(--text-secondary); opacity:0.7; padding:0 4px;'>" +
                 "<span>Maç / Tarih</span>" +
                 "<span style='display:flex; gap:12px; width:80px; justify-content:center;'><span>PTS</span><span>REB</span><span>AST</span></span></div>" +
                 (p.last_games_detail || []).map(function(g) {
-                    var isUnder = g.value < p.line;
-                    var valColor = isUnder ? '#22c55e' : '#ef4444';
+                    var isOver = g.value > p.line;
+                    var valColor = isOver ? '#22c55e' : '#ef4444';
                     var pColor = p.stat === 'PTS' ? valColor : 'var(--text-primary)';
                     var rColor = p.stat === 'REB' ? valColor : 'var(--text-primary)';
                     var aColor = p.stat === 'AST' ? valColor : 'var(--text-primary)';

@@ -1,0 +1,32 @@
+{
+  "version": "nba-props-v1-20261023",
+  "min_halflife": 3.0,
+  "min_gamma": 1.0,
+  "b2b_factor": 1.0,
+  "rate": {
+    "pts": {
+      "halflife": 20.0,
+      "beta": 0.7,
+      "alpha": 0.5
+    },
+    "reb": {
+      "halflife": 10.0,
+      "beta": 0.3,
+      "alpha": 0.5
+    },
+    "ast": {
+      "halflife": 10.0,
+      "beta": 0.3,
+      "alpha": 0.5
+    }
+  },
+  "theta": {
+    "pts": 7.691970707276014,
+    "reb": 18.881770109986277,
+    "ast": 13.183802003210706
+  },
+  "fitted_on": {
+    "train_end": "2026-02-15",
+    "rows": 11995
+  }
+}

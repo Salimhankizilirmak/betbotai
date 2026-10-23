@@ -118,6 +118,8 @@ def parse_boxscore(summary, game):
             idx = {k: i for i, k in enumerate(keys)}
             for a in stat_block.get("athletes", []):
                 ath = a.get("athlete") or {}
+                if not ath.get("id") or not ath.get("displayName"):
+                    continue  # ESPN bazen kimliksiz (boş) oyuncu satırı döner
                 stats = a.get("stats") or []
                 dnp = bool(a.get("didNotPlay")) or not stats
 
@@ -288,6 +290,12 @@ def player_logs(names, season=None, limit=None, fill_previous_season=False):
             if limit is None or len(lst) < limit:
                 lst.append(dict(r))
     return out
+
+def season_rows(seasons):
+    """Model için: verilen sezonların tüm oyuncu satırları."""
+    with _db() as conn, conn.cursor() as cur:
+        cur.execute("SELECT * FROM nba_player_games WHERE season = ANY(%s) ORDER BY game_date", (list(seasons),))
+        return [dict(r) for r in cur.fetchall()]
 
 def player_rows_on_dates(name, dates):
     with _db() as conn, conn.cursor() as cur:

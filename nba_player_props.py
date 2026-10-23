@@ -6,6 +6,12 @@ import asyncio
 from dotenv import load_dotenv
 from nba_api.stats.static import teams as nba_teams  # statik takım listesi (ağ isteği yok)
 import espn_nba
+import numpy as np
+import pandas as pd
+import strategy
+from market.devig import devig
+from market.edge import expected_value
+from models.nba_props_model import PropModel
 from oddsapi_client import get_event_odds
 from strategy import NBA_PROP_MARKETS, PROPS_REGION
 import nba_data
@@ -141,166 +147,184 @@ def _find_opponent(last_games_detail: list, home_team: str, away_team: str) -> s
         return home_team
     return ""  # Takas vb. nedeniyle bilinemiyorsa rakip düzeltmesi uygulanmaz
 
-async def evaluate_prop(player_name: str, stat: str, line: float,
-                        over_odds: float, home_team: str = "", away_team: str = "",
-                        recent_games: int = 3) -> dict:
-    # Kullanıcı 5 maçlık detay istediği için her zaman 5 çekiyoruz
-    form = await get_player_recent_avg(player_name, stat, games=5)
-    all_last_games = form.get("last_games", [])
-    opponent = _find_opponent(form.get("last_games_detail", []), home_team, away_team)
+# ---------------------------------------------------------------- projeksiyon modeli (models/nba_props_model.py)
+MODEL_TTL = 3600
+_model_cache = {"model": None, "ts": 0.0}
+STAT_COL = {"PTS": "pts", "REB": "reb", "AST": "ast"}
 
-    if len(all_last_games) < recent_games:
-        return {"recommendation": None, "reason": "Veri yok", "confidence": 0}
+def get_model():
+    """Bu ve geçen sezonun box score'larıyla modeli bir kez yükler (props turu boyunca tekrar kullanılır)."""
+    if _model_cache["model"] is None or time.time() - _model_cache["ts"] > MODEL_TTL:
+        season = nba_season()
+        rows = espn_nba.season_rows([season, espn_nba.previous_season(season)])
+        _model_cache.update(model=PropModel(rows), ts=time.time())
+    return _model_cache["model"]
 
-    # Çekirdek algoritma hala son 'recent_games' (3) maçlık dar veriye bakar
-    last_games_3 = all_last_games[:recent_games]
-    avg_3 = round(sum(last_games_3) / len(last_games_3), 1)
+def _team_abbr_lookup(model, team_name):
+    hist = model.history
+    for name, abbr in hist[["team_name", "team_abbr"]].drop_duplicates("team_name").itertuples(index=False):
+        if nba_data.team_match(name, team_name):
+            return abbr
+    return None
 
-    deficit = line - avg_3
-    games_below = sum(1 for g in last_games_3 if g < line)
+def evaluate_prop_model(model, prop, home_team, away_team, commence_time):
+    """
+    Bir prop için model olasılığı vs marjsız piyasa olasılığı. İki taraf da değerlendirilir; beklenen değeri
+    yüksek olan taraf döner (eşikleri geçmese bile — kayıt için). Model yoksa / veri yetersizse None.
+    """
+    key = espn_nba.player_key(prop["player"])
+    hist = model.history[model.history["player_key"] == key]
+    if hist.empty:
+        return None
+    team_name = hist["team_name"].iloc[-1]
+    if nba_data.team_match(team_name, home_team):
+        opponent, is_home = away_team, True
+    elif nba_data.team_match(team_name, away_team):
+        opponent, is_home = home_team, False
+    else:
+        return None  # takas/kadro değişikliği: oyuncunun takımı bu maçta değil
+    opp_abbr = _team_abbr_lookup(model, opponent)
+    game_date = espn_nba.us_game_date(commence_time) if commence_time else espn_nba.today_et()
+    proj = model.project(key, game_date, opp_abbr, is_home=is_home, season=nba_season(game_date))
+    col = STAT_COL[prop["stat"]]
+    if not proj or proj.get(f"mu_{col}") is None:
+        return None
+    mu, line = proj[f"mu_{col}"], float(prop["line"])
+    p_over, p_under = model.probabilities(col, mu, line)
+    over_odds, under_odds = prop.get("over_odds"), prop.get("under_odds")
+    if over_odds and under_odds and over_odds > 1 and under_odds > 1:
+        fair_over, fair_under = devig([over_odds, under_odds], "power")
+    else:
+        fair_over = fair_under = None
+    sides = []
+    lam = strategy.PROP_MARKET_SHRINK
+    for side, p, fair, odds in (("OVER", p_over, fair_over, over_odds), ("UNDER", p_under, fair_under, under_odds)):
+        if odds and odds > 1 and fair is not None:
+            # Bahis kararı, piyasaya doğru çekilmiş olasılıkla verilir (ham model sadece kayıt/ölçüm için)
+            p_adj = fair + lam * (p - fair)
+            sides.append({"side": side, "p_raw": p, "p_model": p_adj, "p_fair": fair, "odds": float(odds),
+                          "raw_edge": p - fair, "edge": p_adj - fair, "ev": expected_value(p_adj, odds)})
+    if not sides:
+        return None
+    best = max(sides, key=lambda s: s["ev"])
+    last5 = hist.tail(5).iloc[::-1]
+    season_games = int((hist["season"] == nba_season(game_date)).sum())
+    return {**best, "mu": mu, "line": line, "min_proj": proj["min_proj"], "n_prev": proj["n_prev"],
+            "season_games": season_games,
+            "opp_factor": proj[f"opp_factor_{col}"], "opponent": opponent, "opp_abbr": opp_abbr,
+            "last5": [_row_to_detail(r, col) for r in last5.to_dict("records")]}
 
-    if games_below >= 2 and deficit > 0:
-        pct_below = (deficit / line) * 100
-        confidence = min(90, int(50 + pct_below))
+def _row_to_detail(r, col):
+    return {"date": str(pd.Timestamp(r["game_date"]).date()),
+            "matchup": f"{r['team_abbr']} {'vs.' if r['is_home'] else '@'} {r['opponent_abbr']}",
+            "team_name": r["team_name"], "opponent_name": r["opponent_name"], "season": r["season"],
+            "minutes": r["minutes"], "value": r[col], "pts": r["pts"], "reb": r["reb"], "ast": r["ast"]}
 
-        # 1. VERİTABANI ÖĞRENME (Geçmiş Hatalardan Ders Çıkarma)
-        past_losses = 0
-        try:
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT status FROM bets WHERE match_id LIKE %s AND status = 'LOST' ORDER BY created_at DESC LIMIT 3", (f"PROP_%_{player_name}_{stat}",))
-                past_losses = len(cursor.fetchall())
-        except Exception as e:
-            logging.error(f"Prop memory fetch error: {e}")
+def passes_thresholds(ev_):
+    """Bahis eşiği: model edge'i, pozitif beklenti, yeterli geçmiş ve dakika, makul oran."""
+    return (ev_["edge"] >= strategy.PROP_MIN_EDGE and ev_["ev"] >= strategy.PROP_MIN_EV
+            and ev_["raw_edge"] <= strategy.PROP_MAX_RAW_EDGE
+            and ev_["n_prev"] >= strategy.PROP_MIN_GAMES and ev_["season_games"] >= strategy.PROP_MIN_SEASON_GAMES
+            and ev_["min_proj"] >= strategy.PROP_MIN_MINUTES
+            and strategy.PROP_ODDS_MIN <= ev_["odds"] <= strategy.PROP_ODDS_MAX)
 
-        penalty_reason = ""
-        if past_losses > 0:
-            penalty = past_losses * 15 # Her kayıp için 15 puan sil
-            confidence -= penalty
-            penalty_reason = f" [! {past_losses} eski kayıptan {-penalty} ceza !]"
-            if past_losses >= 2:
-                # 2 kere kaybettiyse tamamen pas geç
-                return {"recommendation": None, "reason": "Kara liste (Üst üste kayıp)", "confidence": 0}
-
-        # 2. RAKİP EŞLEŞMESİ (Zorluk Analizi)
-        opp_modifier = ""
-        if opponent:
-            df = nba_data.fetch_nba_standings()
-            if df is not None:
-                try:
-                    opp_row = df[df['TeamName'].str.contains(opponent.split()[-1], case=False, na=False)]
-                    if not opp_row.empty:
-                        win_pct = float(opp_row.iloc[0].get('WinPCT', '0.50'))
-                        # Defansif zoru win_pct basitleştirilmiş proxy olarak al: win_pct > 0.6 zorlu, < 0.4 kolay
-                        if win_pct > 0.60:
-                            confidence -= 8
-                            opp_modifier = f" (Rakip '{opponent}' formda/zorlu -8 Güven)"
-                        elif win_pct < 0.40:
-                            confidence += 5
-                            opp_modifier = f" (Rakip '{opponent}' zayıf, +5 Güven)"
-                except:
-                    pass
-
-        return {
-            "recommendation": "OVER",
-            "line": line,
-            "over_odds": over_odds,
-            "avg_last_n": avg_3,
-            "deficit": round(deficit, 1),
-            "games_below": games_below,
-            "confidence": confidence,
-            "last_games_detail": form.get("last_games_detail", []), # 5 maçın detayı buraya düşer
-            "reason": f"Son {recent_games} macta ort. {avg_3:.1f} (Hat: {line}) — {deficit:.1f} eksik.{penalty_reason}{opp_modifier} Patlama bekleniyor! 🔥"
-        }
-
-    return {"recommendation": None}
+def _record_predictions(model, rows):
+    """Değerlendirilen tüm prop'ları predictions tablosuna yazar (sonradan isabet/CLV ölçümü için)."""
+    if not rows:
+        return
+    try:
+        from psycopg2.extras import execute_values, Json
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                execute_values(cur, """
+                    INSERT INTO predictions (model_name, model_version, sport_key, event_id, commence_time, market,
+                        selection, player, point, p_model, p_market_fair, price, edge, meta) VALUES %s
+                """, [("nba_props", model.params.get("version", "?"), "basketball_nba", r["event_id"], r["commence_time"],
+                       r["market"], r["side"].title(), r["player"], r["line"], r["p_raw"], r["p_fair"], r["odds"],
+                       r["raw_edge"], Json({"mu": r["mu"], "min_proj": r["min_proj"], "n_prev": r["n_prev"],
+                                            "season_games": r["season_games"], "opp_factor": r["opp_factor"],
+                                            "p_adj": r["p_model"], "edge_adj": r["edge"], "ev_adj": r["ev"],
+                                            "shrink": strategy.PROP_MARKET_SHRINK})) for r in rows])
+            conn.commit()
+    except Exception as e:
+        logging.error(f"predictions yazma hatası: {e}")
 
 async def analyze_nba_player_props(event: dict) -> list:
     event_id = event["id"]
     home_team = event.get("home_team", "")
     away_team = event.get("away_team", "")
+    commence_time = event.get("commence_time")
 
     props = await get_nba_event_props(event_id)
     if not props:
         return []
-    await asyncio.to_thread(preload_player_logs, list({p["player"] for p in props}))
+    model = await asyncio.to_thread(get_model)
 
-    logging.info(f"Analyzing {len(props)} props for {home_team} vs {away_team} (strictly sequential)")
-    recommendations = []
-
-    async def analyze_one(prop):
-        player = prop["player"]
-        stat = prop["stat"]
-        line = prop["line"]
-        over_odds = prop["over_odds"]
-
+    logging.info(f"Analyzing {len(props)} props for {home_team} vs {away_team} (model {model.params.get('version')})")
+    evaluated, recommendations = [], []
+    for prop in props:
         try:
-            result = await evaluate_prop(player, stat, line, over_odds, home_team, away_team, 3)
-
-            if result.get("recommendation") == "OVER" and result.get("confidence", 0) >= 65:
-                # Dynamic bet sizing for player props (max 500 BB)
-                conf = result["confidence"]
-                if conf >= 85:
-                    bet_amount = 500  # Tam gaz!
-                elif conf >= 75:
-                    bet_amount = 300
-                elif conf >= 68:
-                    bet_amount = 150
-                else:
-                    bet_amount = 50
-
-                recommendations.append({
-                    "player": player,
-                    "stat": stat,
-                    "market": prop["market"],
-                    "line": line,
-                    "over_odds": over_odds,
-                    "confidence": conf,
-                    "avg_last_n": result.get("avg_last_n"),
-                    "deficit": result.get("deficit"),
-                    "last_games_detail": result.get("last_games_detail", []),
-                    "reason": result["reason"],
-                    "event_id": event_id,
-                    "home_team": home_team,
-                    "away_team": away_team,
-                    "commence_time": event.get("commence_time"),
-                    "bet_target": f"{player} | {stat} OVER {line}",
-                    "bet_amount": bet_amount
-                })
+            r = evaluate_prop_model(model, prop, home_team, away_team, commence_time)
         except Exception as e:
-            logging.warning(f"Error evaluating prop for {player}: {e}")
+            logging.warning(f"Error evaluating prop for {prop['player']}: {e}")
+            continue
+        if not r:
+            continue
+        row = {**r, "player": prop["player"], "stat": prop["stat"], "market": prop["market"],
+               "event_id": event_id, "commence_time": commence_time}
+        evaluated.append(row)
+        if not passes_thresholds(r):
+            continue
+        stat_tr = {"PTS": "sayı", "REB": "ribaund", "AST": "asist"}[prop["stat"]]
+        side_tr = "ÜST" if r["side"] == "OVER" else "ALT"
+        reason = (f"Projeksiyon: {r['min_proj']:.0f} dk, {r['mu']:.1f} {stat_tr} (çizgi {r['line']}). "
+                  f"Model P({side_tr}) %{r['p_raw'] * 100:.0f}, piyasa %{r['p_fair'] * 100:.0f}, "
+                  f"piyasaya çekilmiş %{r['p_model'] * 100:.0f} → edge +{r['edge'] * 100:.1f} puan, "
+                  f"beklenti +%{r['ev'] * 100:.1f}. Rakip ({r['opp_abbr']}) faktörü {r['opp_factor']:.2f}, "
+                  f"bu sezon {r['season_games']} maç ({r['n_prev']} toplam).")
+        recommendations.append({
+            "player": prop["player"],
+            "stat": prop["stat"],
+            "market": prop["market"],
+            "line": r["line"],
+            "side": r["side"],
+            "odds": r["odds"],
+            "over_odds": prop.get("over_odds"),
+            "under_odds": prop.get("under_odds"),
+            "p_model": round(r["p_model"], 4),
+            "p_raw": round(r["p_raw"], 4),
+            "raw_edge": round(r["raw_edge"], 4),
+            "season_games": r["season_games"],
+            "p_fair": round(r["p_fair"], 4),
+            "edge": round(r["edge"], 4),
+            "ev": round(r["ev"], 4),
+            "mu": round(r["mu"], 2),
+            "min_proj": round(r["min_proj"], 1),
+            "confidence": int(round(r["p_model"] * 100)),
+            "avg_last_n": round(float(np.mean([g["value"] for g in r["last5"]])), 1) if r["last5"] else None,
+            "deficit": round(r["line"] - r["mu"], 1),
+            "last_games_detail": r["last5"],
+            "reason": reason,
+            "event_id": event_id,
+            "home_team": home_team,
+            "away_team": away_team,
+            "commence_time": commence_time,
+            "bet_target": f"{prop['player']} | {prop['stat']} {r['side']} {r['line']}",
+        })
+    await asyncio.to_thread(_record_predictions, model, evaluated)
 
-    await asyncio.gather(*(analyze_one(p) for p in props))
-
-    # 3. FILTRELEME MANTIGI (Baron Kuralları)
-    # - Güvene göre sırala
-    recommendations.sort(key=lambda x: -x["confidence"])
-
-    final_selections = []
-    used_players = set()
-    used_stats = set()
-
+    # Seçim kuralları: en yüksek edge'den başla; maç başına en fazla 3, aynı oyuncuya ve aynı kategoriye bir kez
+    recommendations.sort(key=lambda x: -x["edge"])
+    final_selections, used_players, used_stats = [], set(), set()
     for rec in recommendations:
-        # En fazla 3 oyuncu
         if len(final_selections) >= 3:
             break
-
-        player = rec["player"]
-        stat = rec["stat"]
-
-        # Kural 1: Aynı oyuncuya birden fazla bahis alınmaz
-        if player in used_players:
+        if rec["player"] in used_players or rec["stat"] in used_stats:
             continue
-
-        # Kural 2: Aynı maçta farklı 2 oyuncuya aynı kategori (PTS/REB/AST) oynanmaz
-        if stat in used_stats:
-            continue
-
-        # Seçime ekle ve işaretle
         final_selections.append(rec)
-        used_players.add(player)
-        used_stats.add(stat)
+        used_players.add(rec["player"])
+        used_stats.add(rec["stat"])
 
-    logging.info(f"Props result: {len(final_selections)} filtered recs from {len(recommendations)} candidates ({home_team} vs {away_team})")
+    logging.info(f"Props result: {len(final_selections)} selected / {len(recommendations)} with edge / "
+                 f"{len(evaluated)} evaluated ({home_team} vs {away_team})")
     return final_selections
-

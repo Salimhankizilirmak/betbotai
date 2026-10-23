@@ -521,54 +521,49 @@ async def run_props_cycle(resolve_first=True):
         all_recs.extend(recs)
         await asyncio.sleep(2) # Nefes payı
 
-    all_recs.sort(key=lambda x: -x["confidence"])
+    all_recs.sort(key=lambda x: -x["edge"])
     await asyncio.to_thread(save_nba_props, all_recs)
-    logging.info(f"Otonom NBA Props Cache Güncellendi: {len(all_recs)} patlama bulundu.")
+    logging.info(f"Otonom NBA Props Cache Güncellendi: {len(all_recs)} edge'li prop bulundu.")
 
-    # OTOMATİK PROP BAHİSİ (Süper Master Süzgeç Entegrasyonu)
+    # OTOMATİK PROP BAHİSİ: öneriler zaten model eşiklerini geçti (edge, beklenti, dakika, oran;
+    # bkz. nba_player_props.passes_thresholds). Genel maç süzgeci (%65 olasılık) prop'lara uygulanmaz:
+    # kalibre olasılıklarda ~1.85 orana %65 neredeyse hiç çıkmaz.
     prop_count = 0
-    for prop in all_recs[:15]: # En iyi 15 prop'u incele
-        # Prop için analiz nesnesi oluştur
+    for prop in all_recs[:15]: # En yüksek edge'li 15 prop'u incele
         analysis = {
             "bet_target": prop["bet_target"],
-            "odds_value": prop["over_odds"],
+            "odds_value": prop["odds"],
             "win_probability": prop["confidence"],
-            "risk_score": 100 - prop["confidence"], # Props için risk ters orantılı
+            "risk_score": 100 - prop["confidence"],
             "analysis": prop["reason"]
         }
+        match_id = f"PROP_{prop['event_id']}_{prop['player']}_{prop['stat']}"
+        exists = await asyncio.to_thread(check_bet_exists, match_id)
+        if exists:
+            continue
 
-        # SÜZGEÇ KONTROLÜ
-        is_ok, reason = verify_and_place_bet(analysis, {"id": prop["event_id"]})
+        logging.info(f"✅ PROP ONAYLANDI: {prop['bet_target']} @ {prop['odds']} | edge {prop['edge']:+.3f} ev {prop['ev']:+.3f}")
 
-        if is_ok:
-            match_id = f"PROP_{prop['event_id']}_{prop['player']}_{prop['stat']}"
-            exists = await asyncio.to_thread(check_bet_exists, match_id)
+        # Güvenli Mod
+        multiplier = await get_safe_mode_multiplier()
 
-            if not exists:
-                logging.info(f"✅ PROP ONAYLANDI: {prop['player']} {prop['stat']} | {reason}")
+        # Çeyrek Kelly, modelin (kalibre) olasılığı ve seçilen tarafın oranıyla
+        current_bal = get_current_balance()
+        kelly_stake = calculate_kelly_stake(prop["odds"], prop["p_model"] * 100, current_bal)
+        final_stake = round(kelly_stake * multiplier, 2)
 
-                # Güvenli Mod
-                multiplier = await get_safe_mode_multiplier()
+        # Maç nesnesini taklit et
+        mock_match = {
+            "id": match_id,
+            "sport_key": "basketball_nba",
+            "home_team": prop["home_team"],
+            "away_team": prop["away_team"],
+            "commence_time": prop.get("commence_time", datetime.now(IST).isoformat())
+        }
 
-                current_bal = get_current_balance()
-                kelly_stake = calculate_kelly_stake(prop["over_odds"], prop["confidence"], current_bal)
-                final_stake = round(kelly_stake * multiplier, 2)
-
-                # Maç nesnesini taklit et
-                mock_match = {
-                    "id": match_id,
-                    "sport_key": "basketball_nba",
-                    "home_team": prop["home_team"],
-                    "away_team": prop["away_team"],
-                    "commence_time": prop.get("commence_time", datetime.now(IST).isoformat())
-                }
-
-                await asyncio.to_thread(place_virtual_bet, mock_match, analysis, custom_amount=final_stake)
-                prop_count += 1
-                if prop_count >= 5: break # Bir kerede max 5 prop bahsi
-        else:
-            if prop["confidence"] >= 75: # Sadece yüksek güvenli olanları logla
-                logging.info(f"❌ PROP REDDEDİLDİ: {prop['player']} {prop['stat']} | {reason}")
+        await asyncio.to_thread(place_virtual_bet, mock_match, analysis, custom_amount=final_stake)
+        prop_count += 1
+        if prop_count >= 5: break # Bir kerede max 5 prop bahsi
     return {"props": len(all_recs), "bets_placed": prop_count}
 
 async def background_props_analyzer():
