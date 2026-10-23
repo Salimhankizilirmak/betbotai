@@ -1,17 +1,19 @@
 import asyncio
 import logging
-import psycopg2
 import os
+from dotenv import load_dotenv
+
+# bet_manager DATABASE_URL'i import anında okur, bu yüzden önce .env yüklenmeli
+load_dotenv()
 from bet_manager import revalidate_resolved_bets
 
 logging.basicConfig(level=logging.INFO)
 
-# Hardcode DATABASE_URL from .env for this one-time fix
-DB_URL = "***REMOVED***"
-
 async def trigger():
-    print("🚀 Forcing a one-off revalidation cycle with hardcoded DB_URL...")
-    os.environ['DATABASE_URL'] = DB_URL
+    if not os.getenv("DATABASE_URL"):
+        print("❌ DATABASE_URL tanımlı değil (.env veya ortam değişkeni).")
+        return
+    print("🚀 Forcing a one-off revalidation cycle...")
     try:
         await revalidate_resolved_bets()
         print("✅ Revalidation complete.")

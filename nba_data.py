@@ -4,6 +4,7 @@ import logging
 import threading
 import pandas as pd
 import time
+from seasons import nba_season, nba_regular_season_id
 
 _nba_stats = None
 _player_cache = {}
@@ -38,8 +39,8 @@ def fetch_nba_h2h(team_a_id, team_b_id):
         logging.info(f"Fetching H2H stats for teams {team_a_id} and {team_b_id}")
         gamefinder = leaguegamefinder.LeagueGameFinder(team_id_nullable=team_a_id, vs_team_id_nullable=team_b_id).get_data_frames()[0]
         
-        # Sadece bu sezonu filtrele (2025-26)
-        current_season_games = gamefinder[gamefinder['SEASON_ID'].str.contains('22025')] # 2 -> Regular Season, 2025 -> Year
+        # Sadece bu sezonun normal sezon maçları (SEASON_ID örn. '22026')
+        current_season_games = gamefinder[gamefinder['SEASON_ID'].astype(str) == nba_regular_season_id()]
         
         results = []
         for _, row in current_season_games.iterrows():
@@ -103,7 +104,7 @@ def get_nba_top_players(team_id):
         
     try:
         logging.info(f"Fetching player stats for Team ID: {team_id}")
-        dash = teamplayerdashboard.TeamPlayerDashboard(team_id=team_id, season='2025-26', timeout=10).get_data_frames()[1]
+        dash = teamplayerdashboard.TeamPlayerDashboard(team_id=team_id, season=nba_season(), timeout=10).get_data_frames()[1]
         
         # Sort by PTS
         top_scorers = dash.sort_values(by='PTS', ascending=False).head(3)
@@ -180,7 +181,7 @@ def get_nba_player_game_stat(player_name, date_str, stat_type):
         log = None
         for attempt in range(1, 4):  # 3 attempts
             try:
-                log = playergamelog.PlayerGameLog(player_id=player_id, season='2025-26', timeout=30).get_data_frames()[0]
+                log = playergamelog.PlayerGameLog(player_id=player_id, season=nba_season(target_date), timeout=30).get_data_frames()[0]
                 if not log.empty:
                     break
             except Exception as e:

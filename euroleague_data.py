@@ -2,12 +2,14 @@ import httpx
 import logging
 import asyncio
 from difflib import SequenceMatcher
+from seasons import euroleague_season_code
 
 # Euroleague API Feeds (Internal Incrowd Feeds)
-URL_PLAYER_STATS = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v3/competitions/E/statistics/players/traditional?seasonCode=E2025&seasonMode=All&limit=400&sortDirection=descending&statisticMode=perGame&statisticSortMode=perGame"
-URL_TEAM_SCORE = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v2/competitions/E/stats/clubs/leaders?category=Score&seasonCode=E2025&seasonMode=All&limit=200&aggregate=perGame"
-URL_TEAM_REBOUNDS = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v2/competitions/E/stats/clubs/leaders?category=TotalRebounds&seasonCode=E2025&seasonMode=All&limit=200&aggregate=perGame"
-URL_TEAM_ASSISTS = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v2/competitions/E/stats/clubs/leaders?category=Assists&seasonCode=E2025&seasonMode=All&limit=200&aggregate=perGame"
+# Sezon kodu ({season}) her yenilemede tarihten hesaplanır, örn. E2026
+URL_PLAYER_STATS = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v3/competitions/E/statistics/players/traditional?seasonCode={season}&seasonMode=All&limit=400&sortDirection=descending&statisticMode=perGame&statisticSortMode=perGame"
+URL_TEAM_SCORE = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v2/competitions/E/stats/clubs/leaders?category=Score&seasonCode={season}&seasonMode=All&limit=200&aggregate=perGame"
+URL_TEAM_REBOUNDS = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v2/competitions/E/stats/clubs/leaders?category=TotalRebounds&seasonCode={season}&seasonMode=All&limit=200&aggregate=perGame"
+URL_TEAM_ASSISTS = "https://feeds.incrowdsports.com/provider/euroleague-feeds/v2/competitions/E/stats/clubs/leaders?category=Assists&seasonCode={season}&seasonMode=All&limit=200&aggregate=perGame"
 
 # Caches
 _euro_cache = {
@@ -41,11 +43,12 @@ async def refresh_euroleague_cache():
     logging.info("Refreshing Euroleague Statistics Cache...")
     
     # Parallel fetching
+    season = euroleague_season_code()
     tasks = [
-        fetch_euroleague_json(URL_PLAYER_STATS),
-        fetch_euroleague_json(URL_TEAM_SCORE),
-        fetch_euroleague_json(URL_TEAM_REBOUNDS),
-        fetch_euroleague_json(URL_TEAM_ASSISTS)
+        fetch_euroleague_json(URL_PLAYER_STATS.format(season=season)),
+        fetch_euroleague_json(URL_TEAM_SCORE.format(season=season)),
+        fetch_euroleague_json(URL_TEAM_REBOUNDS.format(season=season)),
+        fetch_euroleague_json(URL_TEAM_ASSISTS.format(season=season))
     ]
     
     results = await asyncio.gather(*tasks)

@@ -1,5 +1,6 @@
 import os
 import time
+import asyncio
 import httpx
 import logging
 from dotenv import load_dotenv
@@ -28,7 +29,7 @@ async def get_sports():
             if response.status_code in [401, 403, 429]:
                 logging.warning(f"get_sports: API Key {api_key[:6]}... failed ({response.status_code}). Rotating...")
                 odds_api_manager.rotate_key()
-                time.sleep(1) # Small delay before retry
+                await asyncio.sleep(1) # Small delay before retry
                 continue
                 
             response.raise_for_status()
@@ -58,7 +59,7 @@ async def get_odds(sport_key="upcoming", region="eu", markets="h2h,totals,spread
             if response.status_code in [401, 403, 429]:
                 logging.warning(f"get_odds: API Key {api_key[:6]}... failed ({response.status_code}). Rotating...")
                 odds_api_manager.rotate_key()
-                time.sleep(1)
+                await asyncio.sleep(1)
                 continue
                 
             response.raise_for_status()
@@ -86,7 +87,7 @@ async def get_scores(sport_key="upcoming", days_from=3):
             if response.status_code in [401, 403, 429]:
                 logging.warning(f"get_scores: API Key {api_key[:6]}... failed ({response.status_code}). Rotating...")
                 odds_api_manager.rotate_key()
-                time.sleep(1)
+                await asyncio.sleep(1)
                 continue
                 
             response.raise_for_status()

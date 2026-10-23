@@ -463,7 +463,7 @@ function renderHistoryList(bets) {
     if (!list) return;
 
     // Use replace(" ", "T") to ensure cross-browser parsing for SQLite datetime
-    const finished = (bets || []).filter(b => b.status === 'WON' || b.status === 'LOST')
+    const finished = (bets || []).filter(b => ['WON', 'LOST', 'VOID'].includes(b.status))
         .sort((a,b) => new Date(b.created_at.replace(" ", "T")) - new Date(a.created_at.replace(" ", "T")));
     list.innerHTML = '';
     
@@ -472,23 +472,26 @@ function renderHistoryList(bets) {
         return;
     }
 
+    // VOID = oyuncu oynamadı, bahis iade (gri)
+    const statusColor = s => s === 'WON' ? '#10b981' : (s === 'VOID' ? '#9ca3af' : '#ef4444');
+
     finished.forEach(b => {
         const item = document.createElement('div');
         item.style.padding = '12px';
         item.style.background = 'rgba(255,255,255,0.02)';
         item.style.borderRadius = '8px';
         item.style.marginBottom = '8px';
-        item.style.borderLeft = b.status === 'WON' ? '4px solid #10b981' : '4px solid #ef4444';
+        item.style.borderLeft = `4px solid ${statusColor(b.status)}`;
         
         item.innerHTML = `
             <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
                 <span style="font-size:11px; color:var(--text-secondary);">${b.sport_key || ''}</span>
-                <span style="font-size:11px; font-weight:bold; color:${b.status==='WON'?'#10b981':'#ef4444'};">${b.status}</span>
+                <span style="font-size:11px; font-weight:bold; color:${statusColor(b.status)};">${b.status}</span>
             </div>
             <div style="font-size:13px; font-weight:600; margin-bottom:4px;">${b.home_team} vs ${b.away_team}</div>
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="color:var(--text-secondary); font-size:12px;">Hedef: ${b.bet_target || 'N/A'} @ ${(b.odds_value||0).toFixed(2)}</span>
-                <span style="font-size:12px; font-weight:bold; color:${b.status==='WON'?'#10b981':'#ef4444'};">${b.status==='WON'?'+':''}${b.profit ? b.profit.toFixed(2) : ''} BB</span>
+                <span style="font-size:12px; font-weight:bold; color:${statusColor(b.status)};">${b.status==='WON'?'+':''}${b.profit ? b.profit.toFixed(2) : ''} BB</span>
             </div>
         `;
         list.appendChild(item);

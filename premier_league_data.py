@@ -2,10 +2,12 @@ import httpx
 import logging
 import asyncio
 from difflib import SequenceMatcher
+from seasons import football_season_year
 
 # Premier League Pulselive API (v2/v3)
 BASE_URL = "https://sdp-prem-prod.premier-league-prod.pulselive.com/api"
-API_PLAYER_LEADERS = f"{BASE_URL}/v3/competitions/8/seasons/2025/players/stats/leaderboard"
+# Sezon yılı ({season}) her yenilemede tarihten hesaplanır, örn. 2026
+API_PLAYER_LEADERS = BASE_URL + "/v3/competitions/8/seasons/{season}/players/stats/leaderboard"
 API_TEAM_LEADERS = f"{BASE_URL}/v2/competitions/8/teams/stats/leaderboard"
 
 # Caches
@@ -47,11 +49,13 @@ async def refresh_pl_cache():
 
     logging.info("Refreshing Premier League Statistics Cache...")
     
+    season = football_season_year()
+    player_url = API_PLAYER_LEADERS.format(season=season)
     tasks = [
-        fetch_pl_json(API_PLAYER_LEADERS, {"_sort": "goals:desc", "_limit": 100}),
-        fetch_pl_json(API_PLAYER_LEADERS, {"_sort": "goal_assists:desc", "_limit": 100}),
-        fetch_pl_json(API_TEAM_LEADERS, {"_sort": "goals:desc", "season": "2025", "_limit": 40}),
-        fetch_pl_json(API_TEAM_LEADERS, {"_sort": "clean_sheets:desc", "season": "2025", "_limit": 40})
+        fetch_pl_json(player_url, {"_sort": "goals:desc", "_limit": 100}),
+        fetch_pl_json(player_url, {"_sort": "goal_assists:desc", "_limit": 100}),
+        fetch_pl_json(API_TEAM_LEADERS, {"_sort": "goals:desc", "season": season, "_limit": 40}),
+        fetch_pl_json(API_TEAM_LEADERS, {"_sort": "clean_sheets:desc", "season": season, "_limit": 40})
     ]
     
     results = await asyncio.gather(*tasks)

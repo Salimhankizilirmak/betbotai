@@ -6,9 +6,11 @@ import asyncio
 import httpx
 from dotenv import load_dotenv
 from nba_api.stats.static import players as nba_players
+from nba_api.stats.static import teams as nba_teams
 from nba_api.stats.endpoints import playergamelog
 from api_key_manager import odds_api_manager
 import nba_data
+from seasons import nba_season
 from bet_manager import get_db_connection
 
 
@@ -116,7 +118,7 @@ def _fetch_player_gamelog_sync(player_id: int, stat: str, games: int) -> dict:
         
         gl = playergamelog.PlayerGameLog(
             player_id=player_id,
-            season="2025-26",
+            season=nba_season(),
             timeout=15
         ).get_data_frames()[0]
 
@@ -169,11 +171,28 @@ async def get_player_recent_avg(player_name: str, stat: str, games: int = 5) -> 
     player_id = matched[0]["id"]
     return await _fetch_player_gamelog_async(player_id, stat, games)
 
+def _team_abbreviation(team_name: str):
+    found = nba_teams.find_teams_by_full_name(team_name) if team_name else []
+    return found[0]["abbreviation"] if found else None
+
+def _find_opponent(last_games_detail: list, home_team: str, away_team: str) -> str:
+    """Oyuncunun takımını son maçının MATCHUP alanından ('LAL vs. BOS' / 'LAL @ BOS') bulur, rakibi döner."""
+    if not last_games_detail:
+        return ""
+    player_abbr = str(last_games_detail[0].get("matchup", "")).split(" ")[0]
+    if player_abbr and player_abbr == _team_abbreviation(home_team):
+        return away_team
+    if player_abbr and player_abbr == _team_abbreviation(away_team):
+        return home_team
+    return ""  # Takas vb. nedeniyle bilinemiyorsa rakip düzeltmesi uygulanmaz
+
 async def evaluate_prop(player_name: str, stat: str, line: float,
-                        over_odds: float, opponent: str = "", recent_games: int = 3) -> dict:
+                        over_odds: float, home_team: str = "", away_team: str = "",
+                        recent_games: int = 3) -> dict:
     # Kullanıcı 5 maçlık detay istediği için her zaman 5 çekiyoruz
     form = await get_player_recent_avg(player_name, stat, games=5)
     all_last_games = form.get("last_games", [])
+    opponent = _find_opponent(form.get("last_games_detail", []), home_team, away_team)
 
     if len(all_last_games) < recent_games:
         return {"recommendation": None, "reason": "Veri yok", "confidence": 0}
@@ -259,11 +278,8 @@ async def analyze_nba_player_props(event: dict) -> list:
         line = prop["line"]
         over_odds = prop["over_odds"]
         
-        # Find opponent
-        opponent = away_team if player in home_team else home_team # Basit bir tahmin, ideal senaryoda api'den tam takım ismi de gelebilir
-
         try:
-            result = await evaluate_prop(player, stat, line, over_odds, opponent, 3)
+            result = await evaluate_prop(player, stat, line, over_odds, home_team, away_team, 3)
             
             if result.get("recommendation") == "OVER" and result.get("confidence", 0) >= 65:
                 # Dynamic bet sizing for player props (max 500 BB)

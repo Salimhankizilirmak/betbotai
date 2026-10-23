@@ -26,6 +26,7 @@ from bet_manager import (
     fuzzy_match
 )
 from nba_player_props import analyze_nba_player_props
+from leagues import ANALYZED_SPORTS
 from dotenv import load_dotenv
 
 # GLOBAL TIMEZONE SYNC
@@ -49,6 +50,9 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+# httpx her isteğin URL'sini (apiKey=... dahil) INFO seviyesinde loglar; anahtarlar loga düşmesin
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 app = FastAPI(title="BetBot AI")
 
@@ -77,18 +81,7 @@ async def api_upcoming(recommended: bool = False):
     """
     Tüm yaklaşan maçları veya sadece önerilenleri döner.
     """
-    sports_to_fetch = [
-        "soccer_turkey_super_league",
-        "soccer_epl", 
-        "soccer_spain_la_liga", 
-        "soccer_italy_serie_a", 
-        "soccer_germany_bundesliga", 
-        "soccer_france_ligue_one", 
-        "soccer_uefa_champs_league", 
-        "basketball_nba",
-        "basketball_euroleague",
-        "upcoming"
-    ]
+    sports_to_fetch = ANALYZED_SPORTS + ["upcoming"]
     
     all_raw = []
     for sport in sports_to_fetch:
@@ -141,13 +134,7 @@ async def api_analyze(event_id: str):
             return cached
             
     try:
-        sports_to_check = [
-            "soccer_epl", "soccer_spain_la_liga", "soccer_italy_serie_a",
-            "soccer_germany_bundesliga", "soccer_france_ligue_one",
-            "soccer_turkey_super_league", "soccer_turkey_1_league",
-            "soccer_uefa_champs_league", "basketball_nba",
-            "basketball_euroleague", "upcoming"
-        ]
+        sports_to_check = ANALYZED_SPORTS + ["upcoming"]
         
         all_odds = []
         for sport in sports_to_check:
@@ -244,7 +231,7 @@ async def check_and_resolve_all_pending_bets():
         if pending_sports:
             logging.info(f"Checking results for pending sports: {pending_sports}")
             for sport in pending_sports:
-                scores = await get_scores(sport)
+                scores = await get_scores(sport) or []
                 for event in scores:
                     if event.get('completed'):
                         home_team = event.get('home_team')
@@ -403,18 +390,7 @@ async def background_analyzer():
             # Önce sonuçları temizle ki bütçe güncellensin
             await check_and_resolve_all_pending_bets()
             
-            sports_to_analyze = [
-                "soccer_turkey_super_league",
-                "soccer_turkey_1_league",
-                "soccer_epl",
-                "soccer_spain_la_liga",
-                "soccer_italy_serie_a",
-                "soccer_germany_bundesliga",
-                "soccer_france_ligue_one",
-                "soccer_uefa_champs_league",
-                "basketball_nba",
-                "basketball_euroleague"
-            ]
+            sports_to_analyze = ANALYZED_SPORTS
             
             combined = []
             for sport in sports_to_analyze:

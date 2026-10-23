@@ -3,11 +3,6 @@ from psycopg2.extras import RealDictCursor
 import os
 import contextlib
 import logging
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import os
-import contextlib
-import logging
 from datetime import datetime
 import urllib.request
 import urllib.parse
@@ -101,8 +96,6 @@ def init_db():
 # Uygulama açılışında DB kontrolü/kurulumu
 init_db()
 
-import contextlib
-
 @contextlib.contextmanager
 def get_db_connection():
     conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
@@ -142,7 +135,7 @@ def get_structured_stats():
         with get_db_connection() as conn:
             cursor = conn.cursor()
             # Tüm sonuçlanmış bahisler
-            cursor.execute("SELECT sport_key, status, odds_value, profit, bet_amount FROM bets WHERE status != 'PENDING' ORDER BY created_at DESC")
+            cursor.execute("SELECT sport_key, status, odds_value, profit, bet_amount FROM bets WHERE status IN ('WON', 'LOST') ORDER BY created_at DESC")
             rows = cursor.fetchall()
             
             # Bekleyen bahis detaylarını çek
@@ -310,7 +303,7 @@ def get_recent_performance(limit=10):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM bets WHERE status != 'PENDING' ORDER BY created_at DESC LIMIT %s", (limit,))
+            cursor.execute("SELECT * FROM bets WHERE status IN ('WON', 'LOST') ORDER BY created_at DESC LIMIT %s", (limit,))
             rows = cursor.fetchall()
             summary = []
             for r in rows:
@@ -411,9 +404,9 @@ def resolve_bet_status(match_id, winner, h_score=None, a_score=None):
                             
                             actual_val = nba_data.get_nba_player_game_stat(prop_player, str(commence_time), prop_stat)
                             if actual_val is not None:
-                                if actual_val == -999.0: # DNP
+                                if actual_val == -999.0: # DNP -> iade
                                     is_winner = False
-                                    status = 'LOST'
+                                    status = 'VOID'
                                     profit = 0.0
                                 else:
                                     is_winner = actual_val > target_line if direction == "OVER" else actual_val < target_line
@@ -524,7 +517,7 @@ async def revalidate_resolved_bets():
                 SELECT id, match_id, bet_target, odds_value, bet_amount, home_team, away_team, 
                        status, profit, commence_time, sport_key
                 FROM bets 
-                WHERE status IN ('WON', 'LOST')
+                WHERE status IN ('WON', 'LOST', 'VOID')
                   AND commence_time IS NOT NULL 
                   AND CAST(commence_time AS TIMESTAMP) >= NOW() - INTERVAL '3 days'
             """)
@@ -706,9 +699,9 @@ async def revalidate_resolved_bets():
                         amount = bet.get('bet_amount', 100.0)
                         safe_odds = odds if odds and odds > 1.0 else 1.90
                         
-                        if is_void: # DNP durumu
+                        if is_void: # DNP durumu -> iade
                             new_profit = 0.0
-                            correct_status = 'LOST' 
+                            correct_status = 'VOID' 
                         else:
                             new_profit = (amount * safe_odds) - amount if is_winner else -amount
 

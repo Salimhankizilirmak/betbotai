@@ -1,7 +1,23 @@
 .env
+.env.*
+!.env.example
 venv/
 .venv/
 __pycache__/
 *.pyc
 data/ai_cache.json
+data/revalidation_status.json
+data/*_historical.csv
 logs/
+
+# Yerel veritabanları ve debug çıktıları (API anahtarı içerebilir)
+*.db
+*.log
+*_out.txt
+*_root.txt
+*_tail.txt
+crash.txt
+error_details.txt
+test_results.txt
+models_list.txt
+player_props_debug.json

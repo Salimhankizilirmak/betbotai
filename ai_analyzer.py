@@ -14,11 +14,12 @@ AI_CACHE = {}
 NBA_PROPS_CACHE = {"data": [], "last_updated": 0}
 
 # İç bağımlılıklar
-from data_loader import get_team_stats
+from data_loader import get_team_stats, get_team_stats_any_league
+from leagues import ODDS_TO_STATS_MAP, UEFA_COMPETITIONS
 from nba_data import get_nba_team_stats
 from bet_manager import place_virtual_bet, get_recent_performance, get_performance_metrics
 from nba_player_props import analyze_nba_player_props
-from euroleague_data import get_euroleague_team_stats, get_euroleague_player_trends
+from euroleague_data import get_euroleague_team_stats, get_euroleague_player_trends, get_euroleague_roster
 from premier_league_data import get_pl_team_stats, get_pl_player_trends
 from api_key_manager import gemini_api_manager
 
@@ -32,7 +33,8 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 # Clients
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
+# Anahtar yoksa OpenAI() import anında hata fırlatır, bu yüzden opsiyonel
+openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 # Groq API'sini OpenAI kütüphanesi üzerinden çağırıyoruz (Daha stabil)
 groq_client = OpenAI(
     api_key=GROQ_API_KEY,
@@ -73,6 +75,15 @@ def save_cache(cache_data):
         logging.error(f"Failed to save AI cache: {e}")
 
 AI_CACHE = load_cache()
+
+DEFAULT_ANALYSIS = {
+    "risk_score": 99,
+    "win_probability": 0,
+    "bet_target": "N/A",
+    "odds_value": 0.0,
+    "recommendation": "Analiz Yapılamadı",
+    "analysis": "Analiz edilebilir market (H2H/Totals) bulunamadı."
+}
 
 def safe_int_extract(val, default=0):
     """Sözlük veya string olarak gelen sayısal değerleri güvenli bir şekilde int'e çevirir."""
@@ -218,6 +229,8 @@ async def rule_based_analysis(match_data, home_stats, away_stats):
 
 async def analyze_with_openai(prompt):
     """OpenAI GPT-4o-mini ile analiz yapar."""
+    if not openai_client:
+        return "OpenAI analizi başarısız oldu."
     try:
         response = await asyncio.to_thread(
             openai_client.chat.completions.create,
@@ -251,16 +264,6 @@ async def calculate_risk(match_data):
     away_stats = None
     player_prop_trends = "Veri yok"
     
-    ODDS_TO_STATS_MAP = {
-        "soccer_epl": "EPL",
-        "soccer_spain_la_liga": "LA_LIGA",
-        "soccer_italy_serie_a": "SERIE_A",
-        "soccer_germany_bundesliga": "BUNDESLIGA",
-        "soccer_france_ligue_one": "LIGUE_1",
-        "soccer_turkey_super_league": "TURKEY",
-        "soccer_turkey_1_league": "TURKEY_2"
-    }
-
     if "soccer" in sport_key:
         league_key = ODDS_TO_STATS_MAP.get(sport_key)
         if sport_key == "soccer_epl":
@@ -275,18 +278,20 @@ async def calculate_risk(match_data):
             # Diğer Soccer Ligleri (CSV Tabanlı)
             home_stats = await get_team_stats(home_name, league_key=league_key)
             away_stats = await get_team_stats(away_name, league_key=league_key)
+        elif sport_key in UEFA_COMPETITIONS:
+            # Avrupa kupaları: her takımın kendi yerel ligindeki bu sezonki form verisi
+            home_stats = await get_team_stats_any_league(home_name)
+            away_stats = await get_team_stats_any_league(away_name)
         else:
-            # Bilinmeyen lig, varsayılan EPL CSV (Geriye dönük uyumluluk)
-            home_stats = await get_team_stats(home_name, league_key="EPL")
-            away_stats = await get_team_stats(away_name, league_key="EPL")
+            home_stats = f"{sport_key} için istatistik kaynağı yok."
+            away_stats = home_stats
     elif "basketball" in sport_key:
         if "nba" in sport_key:
             home_stats = await asyncio.to_thread(get_nba_team_stats, home_name, away_name)
             away_stats = await asyncio.to_thread(get_nba_team_stats, away_name, home_name)
             # NBA Player Props Entegrasyonu
             try:
-                event_id = match_data.get("id")
-                props = await analyze_nba_player_props(event_id, home_name, away_name)
+                props = await analyze_nba_player_props(match_data)
                 if props:
                     # En iyi 5 prop trendini al
                     player_prop_trends = "\n".join([f"- {p['player']} ({p['stat']}): Hat {p['line']} | Güven: %{p['confidence']} | Gerekçe: {p['reason']}" for p in props[:5]])
@@ -486,7 +491,7 @@ async def analyze_event(event):
     # Eğer oranlar hedef aralık dışında veya market yoksa default dön (h2h + totals desteği için is_match_analyzable kullanıyoruz)
     if not is_match_analyzable(event):
         logging.info(f"Skipping {home_team} vs {away_team}: No valid H2H or Totals markets found.")
-        return default_resp
+        return dict(DEFAULT_ANALYSIS)
     
     # Not using legacy best_odds filter here anymore, trusting the analyzer or the should_we_bet logic later
 
