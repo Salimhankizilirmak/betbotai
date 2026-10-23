@@ -1,289 +1,176 @@
-from nba_api.stats.endpoints import leaguestandingsv3, teamplayerdashboard, leaguegamefinder, scoreboardv2
-from nba_api.stats.static import teams as nba_teams
+"""
+NBA takım/oyuncu verileri — ESPN kaynaklı (espn_nba.py).
+
+stats.nba.com GitHub Actions ve Supabase gibi bulut IP'lerini engellediği için nba_api uç noktaları
+kullanılmaz. Fonksiyon imzaları eski nba_api sürümüyle aynıdır; çağıran kod değişmez.
+"""
 import logging
 import threading
-import pandas as pd
 import time
-from seasons import nba_season, nba_regular_season_id
+from datetime import timedelta
+from difflib import SequenceMatcher
 
-_nba_stats = None
-_player_cache = {}
-_h2h_cache = {}
+import pandas as pd
+
+import espn_nba
+
+STANDINGS_TTL = 3600
+_standings = {"df": None, "ts": 0.0}
 _lock = threading.Lock()
 
 def fetch_nba_standings():
-    global _nba_stats
-    if _nba_stats is not None:
-        return _nba_stats
-        
+    """
+    Puan durumu DataFrame'i (eski LeagueStandingsV3 kolon adlarıyla):
+    TeamName (Celtics), TeamCity, DisplayName (Boston Celtics), TeamAbbr, TeamID, WinPCT, Record, CurrentStreak, L10
+    """
     with _lock:
-        if _nba_stats is not None:
-            return _nba_stats
+        if _standings["df"] is not None and time.time() - _standings["ts"] < STANDINGS_TTL:
+            return _standings["df"]
         try:
-            logging.info("Fetching NBA standings from nba_api (Timeout 5s)...")
-            standings = leaguestandingsv3.LeagueStandingsV3(timeout=5).get_data_frames()[0]
-            _nba_stats = standings
-            logging.info("NBA standings fetched successfully.")
-            return _nba_stats
+            rows = espn_nba.fetch_standings()
+            if not rows:
+                return _standings["df"]
+            df = pd.DataFrame([{
+                "TeamName": r["name"],
+                "DisplayName": r["display_name"],
+                "TeamAbbr": r["abbr"],
+                "TeamID": r["team_id"],
+                "WinPCT": r["win_pct"],
+                "Record": r["record"],
+                "CurrentStreak": r["streak"],
+                "L10": r["l10"],
+            } for r in rows])
+            _standings.update(df=df, ts=time.time())
+            return df
         except Exception as e:
-            logging.error(f"Error fetching NBA stats: {e}")
-            return None
+            logging.error(f"Error fetching NBA standings (ESPN): {e}")
+            return _standings["df"]
 
-def fetch_nba_h2h(team_a_id, team_b_id):
-    """İki takım arasındaki bu sezonki maçları getirir."""
-    cache_key = tuple(sorted([team_a_id, team_b_id]))
-    if cache_key in _h2h_cache:
-        return _h2h_cache[cache_key]
+def _standings_row(df, team_name):
+    if df is None or not team_name:
+        return None
+    for _, row in df.iterrows():
+        if team_match(team_name, row["DisplayName"]):
+            return row
+    last_word = team_name.split()[-1]
+    match = df[df["TeamName"].str.contains(last_word, case=False, na=False)]
+    return match.iloc[0] if not match.empty else None
 
+def fetch_nba_h2h(team_a_name, team_b_name):
+    """İki takım (tam ad) arasındaki bu sezonki maçlar."""
     try:
-        logging.info(f"Fetching H2H stats for teams {team_a_id} and {team_b_id}")
-        gamefinder = leaguegamefinder.LeagueGameFinder(team_id_nullable=team_a_id, vs_team_id_nullable=team_b_id).get_data_frames()[0]
-        
-        # Sadece bu sezonun normal sezon maçları (SEASON_ID örn. '22026')
-        current_season_games = gamefinder[gamefinder['SEASON_ID'].astype(str) == nba_regular_season_id()]
-        
-        results = []
-        for _, row in current_season_games.iterrows():
-            date = row['GAME_DATE']
-            matchup = row['MATCHUP']
-            wl = row['WL']
-            pts = row['PTS']
-            opp_pts = row['PTS'] - row['PLUS_MINUS']
-            results.append(f"{date}: {matchup} ({wl}) {pts}-{int(opp_pts)}")
-        
-        h2h_str = " | ".join(results) if results else "Bu sezon henüz karşılaşmadılar."
-        _h2h_cache[cache_key] = h2h_str
-        return h2h_str
+        games = espn_nba.season_games_between(team_a_name, team_b_name)
+        if not games:
+            return "Bu sezon henüz karşılaşmadılar."
+        return " | ".join(
+            f"{g['game_date']}: {g['away_abbr']} @ {g['home_abbr']} {g['away_score']}-{g['home_score']}" for g in games)
     except Exception as e:
         logging.error(f"Error fetching H2H: {e}")
         return "H2H verisi alınamadı."
 
-def get_nba_team_stats(team_name, opponent_name=None):
-    if not team_name:
-        return ""
-        
-    df = fetch_nba_standings()
-    if df is None:
-        return "NBA API stat unavailable."
-        
+def get_nba_top_players(team_abbr):
+    """Takımın bu sezonki en skorer 3 oyuncusu."""
     try:
-        last_word = team_name.split()[-1]
-        team_row = df[df['TeamName'].str.contains(last_word, case=False, na=False)]
-        
-        if team_row.empty:
-            return f"No direct NBA stats found for {team_name}."
-            
-        record = team_row.iloc[0].get('Record', 'N/A')
-        win_pct = team_row.iloc[0].get('WinPCT', '0.00')
-        streak = team_row.iloc[0].get('CurrentStreak', 'N/A')
-        l10 = team_row.iloc[0].get('L10', 'N/A')
-        team_id = team_row.iloc[0].get('TeamID')
-        
-        # Player Stats (Top 3 Scorers)
-        player_info = get_nba_top_players(team_id) if team_id else ""
-        
-        h2h_info = ""
-        if opponent_name:
-            opp_last_word = opponent_name.split()[-1]
-            opp_row = df[df['TeamName'].str.contains(opp_last_word, case=False, na=False)]
-            if not opp_row.empty:
-                opp_id = opp_row.iloc[0].get('TeamID')
-                h2h_info = f"\nBu Sezon H2H: {fetch_nba_h2h(team_id, opp_id)}"
-        
-        return f"{team_name} - Record: {record} (Win %: {win_pct}), Streak: {streak}, L10: {l10}. {player_info} {h2h_info}"
-        
-    except Exception as e:
-        return f"Error reading NBA stats: {e}"
-
-def get_nba_top_players(team_id):
-    """
-    Takımdaki en iyi 3 skorerin istatistiklerini getirir.
-    """
-    if team_id in _player_cache:
-        return _player_cache[team_id]
-        
-    try:
-        logging.info(f"Fetching player stats for Team ID: {team_id}")
-        dash = teamplayerdashboard.TeamPlayerDashboard(team_id=team_id, season=nba_season(), timeout=10).get_data_frames()[1]
-        
-        # Sort by PTS
-        top_scorers = dash.sort_values(by='PTS', ascending=False).head(3)
-        
-        stats_str = "Kilit Oyuncular: "
-        for _, row in top_scorers.iterrows():
-            name = row['PLAYER_NAME']
-            pts = row['PTS']
-            reb = row['REB']
-            ast = row['AST']
-            stats_str += f"{name} ({pts} PTS, {reb} REB, {ast} AST), "
-            
-        _player_cache[team_id] = stats_str.strip(", ")
-        return _player_cache[team_id]
+        top = espn_nba.team_top_scorers(team_abbr)
+        if not top:
+            return ""
+        return "Kilit Oyuncular: " + ", ".join(
+            f"{r['player_name']} ({float(r['pts']):.1f} PTS, {float(r['reb']):.1f} REB, {float(r['ast']):.1f} AST, {r['gp']} maç)"
+            for r in top)
     except Exception as e:
         logging.error(f"Error fetching NBA player stats: {e}")
         return ""
 
+def get_nba_team_stats(team_name, opponent_name=None):
+    if not team_name:
+        return ""
+    df = fetch_nba_standings()
+    if df is None:
+        return "NBA API stat unavailable."
+    try:
+        row = _standings_row(df, team_name)
+        if row is None:
+            return f"No direct NBA stats found for {team_name}."
+        player_info = get_nba_top_players(row["TeamAbbr"])
+        h2h_info = ""
+        if opponent_name:
+            opp = _standings_row(df, opponent_name)
+            if opp is not None:
+                h2h_info = f"\nBu Sezon H2H: {fetch_nba_h2h(row['DisplayName'], opp['DisplayName'])}"
+        return (f"{team_name} - Record: {row['Record']} (Win %: {row['WinPCT']:.3f}), Streak: {row['CurrentStreak']}, "
+                f"L10: {row['L10']}. {player_info} {h2h_info}")
+    except Exception as e:
+        return f"Error reading NBA stats: {e}"
+
+def _date_window(date_str):
+    """commence_time (UTC) -> ABD maç günü ve bir önceki gün (geç saat farkı için)."""
+    d = espn_nba.us_game_date(str(date_str).split(".")[0])
+    return [d, d - timedelta(days=1)]
+
 def get_nba_player_game_stat(player_name, date_str, stat_type):
     """
-    Belirli bir tarihteki maçta oyuncunun istatistiğini getirir.
-    date_str: '2026-03-27T03:00:00Z' veya '2026-03-27 03:00:00' formatında
+    Belirli bir tarihteki maçta oyuncunun istatistiği (prop sonuçlandırma).
+    date_str: '2026-03-27T03:00:00Z' veya '2026-03-27 03:00:00' (UTC)
     stat_type: 'PTS', 'REB', 'AST'
+    Döner: değer, oynamadıysa -999.0 (DNP -> iade), veri yoksa None.
     """
-    from nba_api.stats.static import players as nba_players
-    from nba_api.stats.endpoints import playergamelog
-    
     try:
-        # Player name normalization: "C.J. McCollum" -> try as-is, then without dots
-        names_to_try = [player_name]
-        # Noktalı kısaltmalar: "C.J." -> "CJ" dönüşümü
-        no_dot = player_name.replace('.', '').replace('  ', ' ').strip()
-        if no_dot != player_name:
-            names_to_try.append(no_dot)
-        
-        search = []
-        for name_attempt in names_to_try:
-            search = nba_players.find_players_by_full_name(name_attempt)
-            if search:
-                break
-        
-        if not search:
-            # Fuzzy: soyadı VE adı içeren oyuncuları bul (nokta temizlenmiş versiyonla da dene)
-            last_name = player_name.split()[-1]
-            first_token = player_name.split()[0].replace('.', '')  # "C.J." → "CJ"
-            all_players = nba_players.get_active_players()
-            
-            # Önce hem ad hem soyad eşleşmesi
-            search = [p for p in all_players if 
-                      last_name.lower() in p['full_name'].lower() and 
-                      first_token.lower() in p['full_name'].lower().replace('.', '')]
-            
-            # Sonra sadece soyad (tek kelimeli benzersiz isimler)
-            if not search:
-                search = [p for p in all_players if 
-                          last_name.lower() == p['last_name'].lower()]
-            
-            if search:
-                logging.info(f"Fuzzy match found: '{player_name}' -> '{search[0]['full_name']}'")
-            else:
-                logging.warning(f"Player NOT FOUND in NBA API: '{player_name}'")
-                return None
-        
-        player_id = search[0]['id']
-        found_name = search[0]['full_name']
-        
-        # Tarihi 'YYYY-MM-DD' formatına güvenli biçimde çevir
-        # PostgreSQL datetime -> "2026-04-03 22:30:00" (boşluk) veya "2026-04-03T22:30:00Z" (T)
-        date_str_clean = str(date_str).replace('T', ' ').split('.')[0].split('+')[0].strip()
-        target_date = date_str_clean.split(' ')[0]  # Her zaman YYYY-MM-DD alır
-        
-        logging.info(f"Resolving NBA Prop: '{found_name}' (searched: '{player_name}') on {target_date} for {stat_type}")
-        
-        log = None
-        for attempt in range(1, 4):  # 3 attempts
-            try:
-                log = playergamelog.PlayerGameLog(player_id=player_id, season=nba_season(target_date), timeout=30).get_data_frames()[0]
-                if not log.empty:
-                    break
-            except Exception as e:
-                logging.warning(f"NBA API Attempt {attempt} failed: {e}")
-                if attempt < 3:
-                    import time
-                    time.sleep(2)
-        
-        if log is None or log.empty:
-            logging.warning(f"Empty or unreachable game log for {found_name} after 3 attempts")
-            return None
-        
-        # Tarihe göre filtrele
-        log['GAME_DATE'] = pd.to_datetime(log['GAME_DATE'])
-        
-        # Check target date FIRST, then yesterday (fallback for late night starts)
-        dt_obj = pd.to_datetime(target_date)
-        date_window = [(dt_obj + pd.Timedelta(days=d)).strftime('%Y-%m-%d') for d in [0, -1]]
-        
-        for d in date_window:
-            match = log[log['GAME_DATE'].dt.strftime('%Y-%m-%d') == d]
-            if not match.empty:
-                # If multiple games on that day, take the one with stats
-                actual_val = match.iloc[0].get(stat_type, 0)
-                logging.info(f"✅ Found NBA Stat: {found_name} {stat_type} = {actual_val} (date: {d})")
-                return float(actual_val)
-        
-        logging.warning(f"No game found for {found_name} around {target_date}. Last 3 games: {log['GAME_DATE'].head(3).dt.strftime('%Y-%m-%d').tolist()}")
-        # DNP CHECK: Eğer oyuncu logda bulunamadıysa, takımının o gün maçı var mıydı?
-        try:
-            # Oyuncunun takımını bul (veya lig genelinden o günkü maçları bul)
-            # Daha basit: leaguegamefinder ile o tarihteki TÜM maçları çek
-            from nba_api.stats.endpoints import scoreboardv2
-            sb = scoreboardv2.ScoreboardV2(game_date=target_date, timeout=10).get_data_frames()[0]
-            if not sb.empty:
-                # O gün maçlar var. Eğer oyuncunun takımı sahadaysa ve oyuncu yoksa DNP'dir.
-                # Not: Burada takım eşleştirmesi yapmak biraz karmaşık olabilir, 
-                # ama genel olarak oyuncu o tarihte/civarında yoksa ve o gün NBA'de maçlar varsa 'Final' mı diye bakalım.
-                if any(sb['GAME_STATUS_TEXT'] == 'Final'):
-                    logging.warning(f"DNP/Missing detected for {player_name} around {target_date}. Game(s) finished but no stats.")
-                    return -999.0 # Special DNP Signal
-        except:
-            pass
-
+        window = _date_window(date_str)
+        espn_nba.ensure_dates(window)
+        rows = espn_nba.player_rows_on_dates(player_name, window)
+        played = [r for r in rows if not r["dnp"]]
+        if played:
+            val = played[0].get(stat_type.lower())
+            logging.info(f"✅ Found NBA Stat (ESPN): {player_name} {stat_type} = {val} ({played[0]['game_date']})")
+            return float(val or 0)
+        if rows:
+            logging.warning(f"DNP: {player_name} ({rows[0].get('dnp_reason')}) {rows[0]['game_date']}")
+            return -999.0
+        # Box score'da hiç yoksa: takımı o gün oynayıp maç bittiyse kadroda değil (DNP), yoksa henüz veri yok
+        team = espn_nba.player_last_team(player_name)
+        if team and any(g["completed"] for g in espn_nba.team_games_on_dates(team, window)):
+            logging.warning(f"DNP/Missing: {player_name} box score'da yok, takımı ({team}) oynadı")
+            return -999.0
+        if not team:
+            logging.warning(f"Player NOT FOUND in ESPN data: '{player_name}'")
         return None
     except Exception as e:
         logging.error(f"Error resolving NBA player stat: {e}")
         return None
+
 def get_nba_match_score(home_team, away_team, date_str):
-    """
-    NBA API üzerinden maç skorunu getirir (Odds API yedeği olarak).
-    """
+    """Maç skoru (Odds API yedeği)."""
     try:
-        # Tarihi ayıkla
-        date_str_clean = str(date_str).replace('T', ' ').split('.')[0].split('+')[0].strip()
-        dt_obj = pd.to_datetime(date_str_clean)
-        
-        # Check both the target date and the previous day (for US vs UTC mismatch)
-        dates_to_check = [(dt_obj + pd.Timedelta(days=d)).strftime('%Y-%m-%d') for d in [0, -1]]
-        
-        for target_date in dates_to_check:
-            logging.info(f"🏀 NBA FALLBACK: {home_team} vs {away_team} maçı {target_date} tarihi için aranıyor...")
-            # O günkü tüm maçları çek
-            sb = scoreboardv2.ScoreboardV2(game_date=target_date, timeout=15).get_data_frames()[1] # LineScore
-            
-            if sb.empty:
+        window = _date_window(date_str)
+        espn_nba.ensure_dates(window)
+        for g in espn_nba.games_on_dates(window):
+            if not g["completed"]:
                 continue
-                
-            # Maçları GAME_ID bazlı grupla ve takımları eşleştir
-            game_ids = sb['GAME_ID'].unique()
-            
-            for g_id in game_ids:
-                game_data = sb[sb['GAME_ID'] == g_id]
-                if len(game_data) < 2: continue
-                
-                teams = game_data['TEAM_NAME'].unique().tolist()
-                # Fuzzy match teams
-                h_found = any(dfm(home_team, t) for t in teams)
-                a_found = any(dfm(away_team, t) for t in teams)
-                
-                if h_found and a_found:
-                    h_row = next(row for _, row in game_data.iterrows() if dfm(home_team, row['TEAM_NAME']))
-                    a_row = next(row for _, row in game_data.iterrows() if dfm(away_team, row['TEAM_NAME']))
-                    
-                    h_score = int(h_row['PTS'])
-                    a_score = int(a_row['PTS'])
-                    
-                    logging.info(f"✅ NBA FALLBACK SUCCESS: {home_team} {h_score} - {a_score} {away_team} (Date: {target_date})")
-                    return {
-                        "home_score": h_score,
-                        "away_score": a_score,
-                        "completed": True
-                    }
-                
+            if team_match(home_team, g["home_team"]) and team_match(away_team, g["away_team"]):
+                h, a = g["home_score"], g["away_score"]
+            elif team_match(home_team, g["away_team"]) and team_match(away_team, g["home_team"]):
+                h, a = g["away_score"], g["home_score"]
+            else:
+                continue
+            logging.info(f"✅ NBA FALLBACK SUCCESS (ESPN): {home_team} {h} - {a} {away_team} ({g['game_date']})")
+            return {"home_score": h, "away_score": a, "completed": True}
         return None
     except Exception as e:
         logging.error(f"Error in NBA match score fallback: {e}")
         return None
 
+def team_match(a, b):
+    """
+    NBA takım adı eşleşmesi: tam ad veya lakap (son kelime) aynıysa. Lakaplar ligde benzersizdir;
+    dfm'den farklı olarak 'Los Angeles Lakers' ile 'Los Angeles Clippers'ı eşleştirmez.
+    """
+    if not a or not b:
+        return False
+    na, nb = espn_nba.player_key(a), espn_nba.player_key(b)
+    return bool(na) and bool(nb) and (na == nb or na.split()[-1] == nb.split()[-1])
+
 def dfm(n1, n2, threshold=0.7):
     """Helper for internal fuzzy matching without importing bet_manager."""
-    from difflib import SequenceMatcher
     if not n1 or not n2: return False
     n1, n2 = str(n1).lower().strip(), str(n2).lower().strip()
     if n1 in n2 or n2 in n1: return True

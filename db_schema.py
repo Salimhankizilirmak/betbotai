@@ -63,6 +63,29 @@ SCHEMA_STATEMENTS = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_app_cache_updated ON app_cache (namespace, updated_at)",
     "ALTER TABLE app_cache ENABLE ROW LEVEL SECURITY",
+    # NBA maçları ve box score'lar (ESPN); supabase/migrations/*_nba_games.sql ile aynı
+    """
+    CREATE TABLE IF NOT EXISTS nba_games (
+        game_id TEXT PRIMARY KEY, game_date DATE NOT NULL, season TEXT NOT NULL, start_time TIMESTAMPTZ,
+        status TEXT, completed BOOLEAN NOT NULL DEFAULT FALSE, home_team TEXT, away_team TEXT,
+        home_abbr TEXT, away_abbr TEXT, home_score INTEGER, away_score INTEGER,
+        boxscore_ingested BOOLEAN NOT NULL DEFAULT FALSE, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_nba_games_date ON nba_games (game_date)",
+    """
+    CREATE TABLE IF NOT EXISTS nba_player_games (
+        game_id TEXT NOT NULL REFERENCES nba_games (game_id) ON DELETE CASCADE, athlete_id TEXT NOT NULL,
+        game_date DATE NOT NULL, season TEXT NOT NULL, player_name TEXT NOT NULL, player_key TEXT NOT NULL,
+        team_abbr TEXT, team_name TEXT, opponent_abbr TEXT, opponent_name TEXT, is_home BOOLEAN, starter BOOLEAN,
+        dnp BOOLEAN NOT NULL DEFAULT FALSE, dnp_reason TEXT, minutes REAL, pts INTEGER, reb INTEGER, ast INTEGER,
+        fg3m INTEGER, stl INTEGER, blk INTEGER, tov INTEGER, PRIMARY KEY (game_id, athlete_id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_nba_player_games_player ON nba_player_games (player_key, game_date DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_nba_player_games_team ON nba_player_games (season, team_abbr)",
+    "ALTER TABLE nba_games ENABLE ROW LEVEL SECURITY",
+    "ALTER TABLE nba_player_games ENABLE ROW LEVEL SECURITY",
     # Supabase Data API (anon anahtar) erişemesin; bot postgres rolüyle bağlanır, RLS'ten etkilenmez.
     # supabase/migrations/*_initial_schema.sql ile aynı.
     "ALTER TABLE bets ENABLE ROW LEVEL SECURITY",

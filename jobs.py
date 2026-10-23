@@ -5,7 +5,9 @@ Zamanlanmış işler (GitHub Actions veya Windows Görev Zamanlayıcı buradan �
     python jobs.py props     # NBA oyuncu prop analizi ve sanal bahis
     python jobs.py resolve   # bekleyen bahisleri sonuçlandır + hatalı sonuçları yeniden kontrol et
     python jobs.py closing   # başlamak üzere olan maçların kapanış oranlarını kaydet
-    python jobs.py health    # DB bağlantısı + Odds API kredisi (kota harcamaz)
+    python jobs.py health    # DB bağlantısı + Odds API kredisi (kota harcamaz) + NBA kaynak erişimi
+    python jobs.py nba-ingest    # ESPN'den son NBA maçlarının box score'larını biriktir
+    python jobs.py nba-backfill  # önceki sezonun son haftalarını biriktir (sezon başı için, tek sefer)
 
 Her komut bir tur çalışır ve çıkar. Ortak durum Supabase'de tutulur (bkz. cache_store.py).
 """
@@ -79,7 +81,25 @@ async def job_health():
     return {"db": counts, "odds_api_credits_remaining": CREDIT_STATE.get("remaining"), "nba_stats_api": nba,
             "espn_api": espn}
 
-JOBS = {"analyze": job_analyze, "props": job_props, "resolve": job_resolve, "closing": job_closing, "health": job_health}
+async def job_nba_ingest():
+    import espn_nba
+    return await asyncio.to_thread(espn_nba.ingest_recent)
+
+async def job_nba_backfill():
+    """
+    Sezon başında oyuncuların yeterli maçı olmadığı için önceki sezonun son haftalarını biriktirir.
+    Varsayılan: önceki normal sezonun son ~4 haftası (NBA_BACKFILL_START / NBA_BACKFILL_END ile değiştirilebilir).
+    """
+    from datetime import date
+    import espn_nba
+    from seasons import season_start_year, BASKETBALL_SEASON_START_MONTH
+    y = season_start_year(None, BASKETBALL_SEASON_START_MONTH)  # 2026-27 sezonu -> 2026
+    start = date.fromisoformat(os.getenv("NBA_BACKFILL_START", f"{y}-03-15"))
+    end = date.fromisoformat(os.getenv("NBA_BACKFILL_END", f"{y}-04-15"))
+    return await asyncio.to_thread(espn_nba.ingest_range, start, end)
+
+JOBS = {"analyze": job_analyze, "props": job_props, "resolve": job_resolve, "closing": job_closing, "health": job_health,
+        "nba-ingest": job_nba_ingest, "nba-backfill": job_nba_backfill}
 
 def run(name):
     t0 = time.time()

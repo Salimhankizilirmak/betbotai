@@ -4,9 +4,8 @@ import time
 import logging
 import asyncio
 from dotenv import load_dotenv
-from nba_api.stats.static import players as nba_players
-from nba_api.stats.static import teams as nba_teams
-from nba_api.stats.endpoints import playergamelog
+from nba_api.stats.static import teams as nba_teams  # statik takım listesi (ağ isteği yok)
+import espn_nba
 from oddsapi_client import get_event_odds
 from strategy import NBA_PROP_MARKETS, PROPS_REGION
 import nba_data
@@ -17,15 +16,11 @@ from bet_manager import get_db_connection
 load_dotenv()
 
 # Cache: player game logs
-_gamelog_cache = {}  # key -> {data, timestamp}
 GAMELOG_TTL = 3600   # 1 hour
 
 # Cache: event props
 _props_cache = {}    # event_id -> {data, timestamp}
 PROPS_TTL = 1800     # 30 min
-
-# Strict sequential pacing to avoid Cloudflare WAF blackhole
-NBA_SEMAPHORE = asyncio.Semaphore(1)
 
 async def get_nba_event_props(event_id: str) -> list:
     now = time.time()
@@ -88,75 +83,57 @@ def _parse_props(event_data: dict) -> list:
                     })
     return props
 
-def _fetch_player_gamelog_sync(player_id: int, stat: str, games: int) -> dict:
-    """Senkron olarak nba_api kutuphanesini kullanip veri ceker."""
-    try:
-        # NBA API'ye ard arda istek atmamak icin siki bekleme (WAF atlatma)
-        time.sleep(1.2)
-        
-        gl = playergamelog.PlayerGameLog(
-            player_id=player_id,
-            season=nba_season(),
-            timeout=15
-        ).get_data_frames()[0]
+# Oyuncu maç kayıtları ESPN box score'larından Supabase'e biriktirilir (espn_nba.py);
+# stats.nba.com bulut IP'lerini engellediği için nba_api game log kullanılmaz.
+_logs_cache = {}     # player_key -> {"rows": [...], "ts": float}
 
-        if gl.empty:
-            return {"avg": None, "last_games": [], "player_id": player_id}
-
-        recent_df = gl.head(games)
-        recent = recent_df[stat].tolist()
-        avg = round(sum(recent) / len(recent), 1) if recent else None
-        
-        last_games_detail = []
-        for _, row in recent_df.iterrows():
-            last_games_detail.append({
-                "date": row["GAME_DATE"],
-                "matchup": row["MATCHUP"],
-                "value": row[stat],
-                "pts": int(row.get("PTS", 0)),
-                "reb": int(row.get("REB", 0)),
-                "ast": int(row.get("AST", 0))
-            })
-
-        return {"avg": avg, "last_games": recent, "last_games_detail": last_games_detail, "player_id": player_id}
-
-    except Exception as e:
-        logging.warning(f"Game log fetch exception for player_id={player_id}: {type(e).__name__} - {str(e)[:50]}")
-        return {"avg": None, "last_games": [], "last_games_detail": [], "player_id": player_id}
-
-async def _fetch_player_gamelog_async(player_id: int, stat: str, games: int) -> dict:
-    cache_key = f"{player_id}_{stat}_{games}"
+def preload_player_logs(player_names, games=5):
+    """Bir maçtaki tüm prop oyuncularının son maçlarını tek sorguda önbelleğe alır."""
+    rows_by_key = espn_nba.player_logs(player_names, limit=games, fill_previous_season=True)
     now = time.time()
-    if cache_key in _gamelog_cache and now - _gamelog_cache[cache_key]["ts"] < GAMELOG_TTL:
-        return _gamelog_cache[cache_key]["data"]
+    for name in player_names:
+        k = espn_nba.player_key(name)
+        _logs_cache[k] = {"rows": rows_by_key.get(k, []), "ts": now}
 
-    # Strict semaphore blocks concurrent stats.nba.com entry entirely
-    async with NBA_SEMAPHORE:
-        result = await asyncio.to_thread(_fetch_player_gamelog_sync, player_id, stat, games)
-        _gamelog_cache[cache_key] = {"data": result, "ts": now}
-        return result
+def _logs_to_form(rows, stat):
+    col = stat.lower()  # PTS -> pts
+    recent = [r[col] or 0 for r in rows]
+    detail = [{
+        "date": str(r["game_date"]),
+        "matchup": f"{r['team_abbr']} {'vs.' if r['is_home'] else '@'} {r['opponent_abbr']}",
+        "team_name": r["team_name"],
+        "opponent_name": r["opponent_name"],
+        "season": r["season"],
+        "value": r[col] or 0,
+        "pts": r["pts"] or 0,
+        "reb": r["reb"] or 0,
+        "ast": r["ast"] or 0,
+    } for r in rows]
+    avg = round(sum(recent) / len(recent), 1) if recent else None
+    return {"avg": avg, "last_games": recent, "last_games_detail": detail, "player_id": None}
 
 async def get_player_recent_avg(player_name: str, stat: str, games: int = 5) -> dict:
-    matched = nba_players.find_players_by_full_name(player_name)
-    if not matched:
-        last_name = player_name.split()[-1]
-        matched = [p for p in nba_players.get_active_players()
-                   if last_name.lower() in p['full_name'].lower()]
-
-    if not matched:
-        return {"avg": None, "last_games": [], "player_id": None}
-
-    player_id = matched[0]["id"]
-    return await _fetch_player_gamelog_async(player_id, stat, games)
+    k = espn_nba.player_key(player_name)
+    cached = _logs_cache.get(k)
+    if not cached or time.time() - cached["ts"] > GAMELOG_TTL:
+        await asyncio.to_thread(preload_player_logs, [player_name], games)
+        cached = _logs_cache.get(k, {"rows": []})
+    return _logs_to_form(cached["rows"][:games], stat)
 
 def _team_abbreviation(team_name: str):
     found = nba_teams.find_teams_by_full_name(team_name) if team_name else []
     return found[0]["abbreviation"] if found else None
 
 def _find_opponent(last_games_detail: list, home_team: str, away_team: str) -> str:
-    """Oyuncunun takımını son maçının MATCHUP alanından ('LAL vs. BOS' / 'LAL @ BOS') bulur, rakibi döner."""
+    """Oyuncunun takımını son maçından bulur (takım adı, yoksa 'LAL vs. BOS' MATCHUP kısaltması), rakibi döner."""
     if not last_games_detail:
         return ""
+    team_name = last_games_detail[0].get("team_name")
+    if team_name:
+        if nba_data.team_match(team_name, home_team):
+            return away_team
+        if nba_data.team_match(team_name, away_team):
+            return home_team
     player_abbr = str(last_games_detail[0].get("matchup", "")).split(" ")[0]
     if player_abbr and player_abbr == _team_abbreviation(home_team):
         return away_team
@@ -185,7 +162,7 @@ async def evaluate_prop(player_name: str, stat: str, line: float,
     if games_below >= 2 and deficit > 0:
         pct_below = (deficit / line) * 100
         confidence = min(90, int(50 + pct_below))
-        
+
         # 1. VERİTABANI ÖĞRENME (Geçmiş Hatalardan Ders Çıkarma)
         past_losses = 0
         try:
@@ -195,10 +172,10 @@ async def evaluate_prop(player_name: str, stat: str, line: float,
                 past_losses = len(cursor.fetchall())
         except Exception as e:
             logging.error(f"Prop memory fetch error: {e}")
-            
+
         penalty_reason = ""
         if past_losses > 0:
-            penalty = past_losses * 15 # Her kayıp için 15 puan sil 
+            penalty = past_losses * 15 # Her kayıp için 15 puan sil
             confidence -= penalty
             penalty_reason = f" [! {past_losses} eski kayıptan {-penalty} ceza !]"
             if past_losses >= 2:
@@ -242,10 +219,11 @@ async def analyze_nba_player_props(event: dict) -> list:
     event_id = event["id"]
     home_team = event.get("home_team", "")
     away_team = event.get("away_team", "")
-    
+
     props = await get_nba_event_props(event_id)
     if not props:
         return []
+    await asyncio.to_thread(preload_player_logs, list({p["player"] for p in props}))
 
     logging.info(f"Analyzing {len(props)} props for {home_team} vs {away_team} (strictly sequential)")
     recommendations = []
@@ -255,10 +233,10 @@ async def analyze_nba_player_props(event: dict) -> list:
         stat = prop["stat"]
         line = prop["line"]
         over_odds = prop["over_odds"]
-        
+
         try:
             result = await evaluate_prop(player, stat, line, over_odds, home_team, away_team, 3)
-            
+
             if result.get("recommendation") == "OVER" and result.get("confidence", 0) >= 65:
                 # Dynamic bet sizing for player props (max 500 BB)
                 conf = result["confidence"]
@@ -292,33 +270,32 @@ async def analyze_nba_player_props(event: dict) -> list:
         except Exception as e:
             logging.warning(f"Error evaluating prop for {player}: {e}")
 
-    # Gather parallel but strictly gated by Semaphore(1)
     await asyncio.gather(*(analyze_one(p) for p in props))
 
     # 3. FILTRELEME MANTIGI (Baron Kuralları)
     # - Güvene göre sırala
     recommendations.sort(key=lambda x: -x["confidence"])
-    
+
     final_selections = []
     used_players = set()
     used_stats = set()
-    
+
     for rec in recommendations:
         # En fazla 3 oyuncu
         if len(final_selections) >= 3:
             break
-            
+
         player = rec["player"]
         stat = rec["stat"]
-        
+
         # Kural 1: Aynı oyuncuya birden fazla bahis alınmaz
         if player in used_players:
             continue
-            
+
         # Kural 2: Aynı maçta farklı 2 oyuncuya aynı kategori (PTS/REB/AST) oynanmaz
         if stat in used_stats:
             continue
-            
+
         # Seçime ekle ve işaretle
         final_selections.append(rec)
         used_players.add(player)

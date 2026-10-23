@@ -1,0 +1,13 @@
+name: job-nba-backfill
+# Elle çalıştırılır: önceki sezonun son haftalarının box score'larını ESPN'den biriktirir (sezon başı için)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backfill:
+    uses: ./.github/workflows/_run-job.yml
+    with:
+      task: nba-backfill
+      timeout: 30
+    secrets: inherit

@@ -376,6 +376,9 @@ def verify_and_place_bet(analysis, event):
 async def run_resolve_cycle(revalidate=True):
     """Tek tur: bekleyen bahisleri sonuçlandırır, istenirse hatalı sonuçları yeniden kontrol eder."""
     logging.info("🔄 Bahis kontrolü başlatılıyor...")
+    # NBA prop/skor sonuçları ESPN box score'larından okunur; önce son maçları biriktir
+    import espn_nba
+    await asyncio.to_thread(espn_nba.ingest_recent)
     await check_and_resolve_all_pending_bets()
     if revalidate:
         import bet_manager
@@ -488,6 +491,9 @@ async def background_analyzer():
 async def run_props_cycle(resolve_first=True):
     """Tek tur NBA oyuncu prop analizi; sonuçları ortak önbelleğe yazar ve uygun prop'lara sanal bahis alır."""
     from ai_analyzer import save_nba_props
+    import espn_nba
+    # Oyuncu son maç verileri ESPN box score'larından (stats.nba.com bulut IP'lerini engelliyor)
+    await asyncio.to_thread(espn_nba.ingest_recent)
     if resolve_first:
         await check_and_resolve_all_pending_bets()
 
