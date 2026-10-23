@@ -6,7 +6,7 @@ services:
     startCommand: python main.py
     envVars:
       - key: PYTHON_VERSION
-        value: 3.10.0
+        value: 3.12.10
       - key: PORT
         value: 8005
       - key: ODDS_API_KEY

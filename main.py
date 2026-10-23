@@ -190,7 +190,8 @@ def get_logs():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "port": 8005}
+    from oddsapi_client import CREDIT_STATE
+    return {"status": "ok", "port": 8005, "odds_api_credits": CREDIT_STATE}
 
 @app.get("/api/stats")
 async def api_stats():
@@ -540,6 +541,21 @@ async def background_props_analyzer():
         
         await asyncio.sleep(7200) # 2 hours
 
+async def background_odds_collector():
+    """Başlamak üzere olan maçların kapanış oranlarını (CLV/backtest için) 5 dakikada bir toplar."""
+    import strategy
+    from ingest.odds_snapshots import collect_closing_lines
+    if not strategy.COLLECT_CLOSING_LINES:
+        logging.info("Kapanış oranı toplama kapalı (COLLECT_CLOSING_LINES=false).")
+        return
+    await asyncio.sleep(60)
+    while True:
+        try:
+            await collect_closing_lines()
+        except Exception as e:
+            logging.error(f"Odds collector error: {e}")
+        await asyncio.sleep(300)
+
 @app.on_event("startup")
 async def startup():
     init_db()
@@ -553,6 +569,7 @@ async def startup():
     # 2. Döngüleri Başlat
     asyncio.create_task(background_analyzer())
     asyncio.create_task(background_props_analyzer())
+    asyncio.create_task(background_odds_collector())
     logging.info("BetBot Server Live on Port 8005")
 
 if __name__ == "__main__":

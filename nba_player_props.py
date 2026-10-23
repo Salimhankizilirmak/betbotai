@@ -3,19 +3,18 @@ import json
 import time
 import logging
 import asyncio
-import httpx
 from dotenv import load_dotenv
 from nba_api.stats.static import players as nba_players
 from nba_api.stats.static import teams as nba_teams
 from nba_api.stats.endpoints import playergamelog
-from api_key_manager import odds_api_manager
+from oddsapi_client import get_event_odds
+from strategy import NBA_PROP_MARKETS, PROPS_REGION
 import nba_data
 from seasons import nba_season
 from bet_manager import get_db_connection
 
 
 load_dotenv()
-BASE_URL = "https://api.the-odds-api.com/v4"
 
 # Cache: player game logs
 _gamelog_cache = {}  # key -> {data, timestamp}
@@ -33,36 +32,15 @@ async def get_nba_event_props(event_id: str) -> list:
     if event_id in _props_cache and now - _props_cache[event_id]["ts"] < PROPS_TTL:
         return _props_cache[event_id]["data"]
 
-    markets = "player_points,player_rebounds,player_assists"
-    url = f"{BASE_URL}/sports/basketball_nba/events/{event_id}/odds"
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            max_retries = odds_api_manager.get_max_retries()
-            for attempt in range(max_retries):
-                api_key = odds_api_manager.get_current_key()
-                params = {
-                    "apiKey": api_key,
-                    "regions": "us",
-                    "markets": markets,
-                    "oddsFormat": "decimal"
-                }
-                resp = await client.get(url, params=params)
-                
-                if resp.status_code in [401, 403, 429]:
-                    logging.warning(f"get_nba_event_props: API Key {api_key[:6]}... failed ({resp.status_code}). Rotating...")
-                    odds_api_manager.rotate_key()
-                    await asyncio.sleep(1)
-                    continue
-                    
-                if resp.status_code != 200:
-                    logging.warning(f"Player props API returned {resp.status_code} for event {event_id}")
-                    return []
-                
-                data = resp.json()
-                props = _parse_props(data)
-                _props_cache[event_id] = {"data": props, "ts": now}
-                return props
+        # get_event_odds yanıtı odds_snapshots tablosuna da kaydeder (prop çizgisi geçmişi)
+        data = await get_event_odds("basketball_nba", event_id, ",".join(NBA_PROP_MARKETS), region=PROPS_REGION)
+        if not data:
+            logging.warning(f"Player props API returned no data for event {event_id}")
             return []
+        props = _parse_props(data)
+        _props_cache[event_id] = {"data": props, "ts": now}
+        return props
     except Exception as e:
         logging.error(f"Player props fetch error: {e}")
         return []

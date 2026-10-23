@@ -88,7 +88,11 @@ def init_db():
                     if 'bet_amount' not in columns:
                         cursor.execute("ALTER TABLE bets ADD COLUMN bet_amount REAL DEFAULT 100.0")
                         logging.info("Database migration: Added bet_amount column.")
-                        
+
+                    # Faz 2: oran snapshot'ları ve model tahminleri
+                    from db_schema import ensure_schema
+                    ensure_schema(cursor)
+
                     conn.commit()
     except Exception as e:
         logging.error(f"Database init error: {e}")
