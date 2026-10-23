@@ -43,6 +43,18 @@ async def job_closing():
         return {"skipped": "COLLECT_CLOSING_LINES=false"}
     return {"rows_saved": await collect_closing_lines()}
 
+def _nba_stats_check():
+    """stats.nba.com bu makineden (ör. GitHub Actions IP'si) erişilebilir mi? Tek istek, kota yok."""
+    from nba_api.stats.endpoints import playergamelogs
+    from seasons import nba_season
+    t0 = time.time()
+    try:
+        df = playergamelogs.PlayerGameLogs(season_nullable=nba_season(), season_type_nullable="Regular Season",
+                                           timeout=30).get_data_frames()[0]
+        return {"ok": True, "season": nba_season(), "rows": len(df), "secs": round(time.time() - t0, 1)}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:150]}", "secs": round(time.time() - t0, 1)}
+
 async def job_health():
     import bet_manager
     from oddsapi_client import get_sports, CREDIT_STATE
@@ -51,7 +63,8 @@ async def job_health():
                     "(SELECT count(*) FROM app_cache) AS cache_rows")
         counts = dict(cur.fetchone())
     await get_sports()  # /sports kota harcamaz, ama kalan kredi başlığını döner
-    return {"db": counts, "odds_api_credits_remaining": CREDIT_STATE.get("remaining")}
+    nba = await asyncio.to_thread(_nba_stats_check)
+    return {"db": counts, "odds_api_credits_remaining": CREDIT_STATE.get("remaining"), "nba_stats_api": nba}
 
 JOBS = {"analyze": job_analyze, "props": job_props, "resolve": job_resolve, "closing": job_closing, "health": job_health}
 
