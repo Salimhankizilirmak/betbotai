@@ -1,7 +1,7 @@
 """
 Zamanlanmış işler (GitHub Actions veya Windows Görev Zamanlayıcı buradan çalıştırır).
 
-    python jobs.py analyze   # maç oranlarını çek, yeni maçları analiz et, sanal bahis al
+    python jobs.py analyze   # maç oranları: Pinnacle'a göre değer varsa sanal bahis (futbol + basketbol)
     python jobs.py props     # NBA oyuncu prop analizi ve sanal bahis
     python jobs.py resolve   # bekleyen bahisleri sonuçlandır + hatalı sonuçları yeniden kontrol et
     python jobs.py closing   # başlamak üzere olan maçların kapanış oranlarını kaydet
@@ -27,10 +27,8 @@ os.environ.setdefault("RUN_BACKGROUND_LOOPS", "false")
 import main  # noqa: E402  (logging, app ve tur fonksiyonları)
 import strategy  # noqa: E402
 
-MAX_NEW_ANALYSES = int(os.getenv("MAX_NEW_ANALYSES", "15"))
-
 async def job_analyze():
-    return await main.run_analysis_cycle(resolve_first=False, max_new_analyses=MAX_NEW_ANALYSES)
+    return await main.run_analysis_cycle(resolve_first=False)
 
 async def job_props():
     return await main.run_props_cycle(resolve_first=False)

@@ -400,12 +400,12 @@ async def background_resolver():
             logging.error(f"Error in background_resolver: {e}")
             await asyncio.sleep(60)
 
-async def run_football_value_cycle(events, max_bets=10):
+async def run_value_cycle(events, max_bets=10, label="maç"):
     """
-    Futbol: Pinnacle marjsız olasılığı vs şirketler arası en iyi oran (football_value.py). Model/LLM karar vermez;
-    LLM sadece bahis alınan maçlar için Telegram/panel gerekçesi yazar.
+    Maç bahisleri (futbol + basketbol): Pinnacle marjsız olasılığı vs şirketler arası en iyi oran (value_bets.py).
+    Model/LLM karar vermez; LLM sadece bahis alınan maçlar için Telegram/panel gerekçesi yazar.
     """
-    import football_value as fv
+    import value_bets as vb
     import cache_store
     from ai_analyzer import explain_value_pick, AI_CACHE_NAMESPACE
     from datetime import timezone
@@ -415,17 +415,17 @@ async def run_football_value_cycle(events, max_bets=10):
         try:
             if datetime.fromisoformat(e["commence_time"].replace("Z", "+00:00")) <= now:
                 continue
-            res = fv.evaluate_event(e)
+            res = vb.evaluate_event(e)
             if not res:
                 continue
             evaluated.append((e, res))
-            analysis = fv.to_analysis(e, res)
+            analysis = vb.to_analysis(e, res)
             if res["best"] and placed < max_bets and not await asyncio.to_thread(check_bet_exists, e["id"]):
                 explanation = await explain_value_pick(e, analysis)
-                analysis = fv.to_analysis(e, res, explanation)
+                analysis = vb.to_analysis(e, res, explanation)
                 multiplier = await get_safe_mode_multiplier()
                 stake = calculate_kelly_stake(analysis["odds_value"], analysis["win_probability"], get_current_balance())
-                logging.info(f"✅ FUTBOL DEĞER BAHSİ: {e['home_team']} vs {e['away_team']} | {analysis['bet_target']} "
+                logging.info(f"✅ DEĞER BAHSİ ({label}): {e['home_team']} vs {e['away_team']} | {analysis['bet_target']} "
                              f"@ {analysis['odds_value']} ({analysis['bookmaker']}) EV {analysis['ev']:+.3f}")
                 await asyncio.to_thread(place_virtual_bet, e, analysis, custom_amount=round(stake * multiplier, 2))
                 placed += 1
@@ -434,85 +434,36 @@ async def run_football_value_cycle(events, max_bets=10):
             AI_CACHE[e["id"]] = entry
             cache_items[e["id"]] = entry
         except Exception as ex:
-            logging.error(f"Futbol değer hatası {e.get('id')}: {ex}")
+            logging.error(f"Değer turu hatası {e.get('id')}: {ex}")
     await asyncio.to_thread(cache_store.put_many, AI_CACHE_NAMESPACE, cache_items)
-    await asyncio.to_thread(__import__("football_value").record_predictions, evaluated)
+    await asyncio.to_thread(vb.record_predictions, evaluated)
     n_value = sum(1 for _, r in evaluated if r["best"])
-    logging.info(f"⚽ Futbol değer turu: {len(evaluated)} maç değerlendirildi, {n_value} değerli, {placed} bahis.")
-    return {"football_evaluated": len(evaluated), "football_value": n_value, "football_bets": placed}
+    logging.info(f"🎯 Değer turu ({label}): {len(events)} maç, {len(evaluated)} Pinnacle referanslı, "
+                 f"{n_value} değerli, {placed} bahis.")
+    return {"listed": len(events), "evaluated": len(evaluated), "value": n_value, "bets": placed}
 
-async def run_analysis_cycle(resolve_first=True, max_new_analyses=None):
+async def run_analysis_cycle(resolve_first=True):
     """
-    Tek tur: futbol için Pinnacle'a göre değer (run_football_value_cycle); basketbol maçları için eski LLM akışı.
-    max_new_analyses: basketbolda bu turda en fazla kaç yeni (önbellekte olmayan) maç AI'ya sorulsun.
+    Tek tur maç bahsi: futbol ve basketbol (taraf/toplam) için Pinnacle'a göre değer. Ek Odds API kredisi
+    harcamaz (oran listeleri zaten çekiliyor/önbellekte). NBA oyuncu prop'ları ayrı turda (run_props_cycle).
     """
     # Önce sonuçları temizle ki bütçe güncellensin
     if resolve_first:
         await check_and_resolve_all_pending_bets()
 
-    soccer, combined = [], []
+    soccer, basketball = [], []
     for sport in ANALYZED_SPORTS:
         try:
             data = await get_odds(sport)
             if isinstance(data, list):
-                if sport.startswith("soccer"):
-                    soccer.extend(data)
-                else:
-                    combined.extend(data[:5]) # Her ligden en yakın 5 maçı al (Rate limit koruması)
+                (soccer if sport.startswith("soccer") else basketball).extend(data)
         except Exception as ex:
             logging.error(f"Error fetching {sport} for background analysis: {ex}")
 
-    football = await run_football_value_cycle(soccer)
-
-    # Basketbol (maç sonucu/toplam): eski LLM akışı
-    combined.sort(key=lambda x: x.get('commence_time', ''))
-    count = 0
-    new_analyses = 0
-    for match in combined:
-        try:
-            match_id = match["id"]
-            exists = await asyncio.to_thread(check_bet_exists, match_id)
-
-            if not exists:
-                res = None
-                if match_id in AI_CACHE:
-                    res = AI_CACHE[match_id]
-                    logging.info(f"Cached Analiz Kullanıldı: {match['home_team']} vs {match['away_team']}")
-                else:
-                    if max_new_analyses is not None and new_analyses >= max_new_analyses:
-                        continue
-                    logging.info(f"Otonom Analiz: {match['home_team']} vs {match['away_team']}")
-                    res = await analyze_event(match)
-                    new_analyses += 1
-
-                if not res: continue
-
-                is_ok, reason = verify_and_place_bet(res, match)
-
-                if is_ok:
-                    logging.info(f"✅ BAHİS ONAYLANDI: {match['home_team']} vs {match['away_team']} | {reason}")
-                    multiplier = await get_safe_mode_multiplier()
-                    import bet_manager
-                    current_bal = bet_manager.get_current_balance()
-                    odds = res.get('odds_value', 1.90)
-                    prob = res.get('win_probability', 50)
-                    kelly_stake = bet_manager.calculate_kelly_stake(odds, prob, current_bal)
-                    final_stake = round(kelly_stake * multiplier, 2)
-                    # GÜVENLİ MOD: Eğer çarpan 0.5 ise (win rate < 50), miktar en fazla 25.0 olsun (Kullanıcı Talebi)
-                    if multiplier < 1.0:
-                        final_stake = 25.0
-                    await asyncio.to_thread(bet_manager.place_virtual_bet, match, res, custom_amount=final_stake)
-                    count += 1
-                    await asyncio.sleep(5)
-                else:
-                    logging.info(f"❌ BAHİS REDDEDİLDİ: {match['home_team']} vs {match['away_team']} | {reason}")
-        except Exception as match_error:
-            logging.error(f"Error processing match {match.get('id')}: {match_error}")
-            continue
-
-        if count >= 10: break # Bir döngüde en fazla 10 bahis alsın
-    logging.info(f"Analiz turu bitti: futbol {football}, basketbol {new_analyses} yeni analiz, {count} bahis.")
-    return {**football, "basketball_new_analyses": new_analyses, "basketball_bets": count}
+    football = await run_value_cycle(soccer, max_bets=10, label="futbol")
+    basket = await run_value_cycle(basketball, max_bets=5, label="basketbol")
+    logging.info(f"Analiz turu bitti: futbol {football}, basketbol {basket}")
+    return {"football": football, "basketball": basket}
 
 async def background_analyzer():
     logging.info("Background analyzer started.")

@@ -1,5 +1,5 @@
-"""Futbol değer seçicisi (Pinnacle'a göre) için çevrimdışı testler: python test_football_value.py"""
-import football_value as fv
+"""Değer seçicisi (Pinnacle'a göre; futbol + basketbol) için çevrimdışı testler: python test_value_bets.py"""
+import value_bets as fv
 from market.devig import devig
 
 
@@ -56,6 +56,23 @@ def test_totals_matched_by_point():
     assert over25["book"] == "onexbet" and abs(over25["p_fair"] - 0.5) < 1e-9
     assert r["best"]["pick"] == "OVER 2.5" and not any(c["pick"] == "OVER 3.5" for c in r["candidates"])
     assert fv.pick_label("OVER 2.5") == "2.5 Üst" and fv.pick_label("DRAW") == "Beraberlik (X)"
+
+
+def test_basketball_two_way_moneyline_and_totals():
+    def bbook(key, h, a, over, under, point=221.5):
+        return {"key": key, "markets": [
+            {"key": "h2h", "outcomes": [{"name": "Boston Celtics", "price": h}, {"name": "New York Knicks", "price": a}]},
+            {"key": "totals", "outcomes": [{"name": "Over", "price": over, "point": point},
+                                           {"name": "Under", "price": under, "point": point}]}]}
+    e = {"id": "nba1", "sport_key": "basketball_nba", "home_team": "Boston Celtics", "away_team": "New York Knicks",
+         "commence_time": "2026-10-24T00:00:00Z",
+         "bookmakers": [bbook("pinnacle", 1.80, 2.10, 1.91, 1.91), bbook("onexbet", 1.92, 2.02, 1.93, 1.85)]}  # ev sahibi EV ~ +%3.3, üst EV ~ +%1.5
+    r = fv.evaluate_event(e)
+    fair = devig([1.80, 2.10], "power")
+    home = [c for c in r["candidates"] if c["pick"] == "HOME_WIN"][0]
+    assert abs(home["p_fair"] - fair[0]) < 1e-12 and not any(c["pick"] == "DRAW" for c in r["candidates"])
+    assert r["best"]["pick"] == "HOME_WIN" and abs(r["best"]["ev"] - (fair[0] * 1.92 - 1)) < 1e-12
+    assert any(c["pick"] == "OVER 221.5" for c in r["candidates"])
 
 
 if __name__ == "__main__":

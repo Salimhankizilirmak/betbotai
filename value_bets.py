@@ -1,11 +1,12 @@
 """
-Futbol bahis kararı: keskin piyasaya (Pinnacle) göre değer.
+Maç bahsi kararı (futbol + basketbol): keskin piyasaya (Pinnacle) göre değer.
 
-    adil olasılık p  = Pinnacle oranlarının marjı çıkarılmış hali (1X2: Shin, alt/üst: power)
+    adil olasılık p  = Pinnacle oranlarının marjı çıkarılmış hali (1X2: Shin; 2 seçenekli taraf ve alt/üst: power)
     fiyat            = diğer şirketler arasındaki en yüksek oran (borsalar hariç: komisyon öncesi fiyat)
     EV               = p · fiyat − 1      ->  EV >= FOOTBALL_MIN_EV ve 1.30 <= fiyat <= 4.00 ise bahis
 
-Backtest (reports/football_backtest.json, value_vs_pinnacle): EV >= %2'de ROI +%7.9, CLV +%3.6.
+Backtest (futbol, reports/football_backtest.json, value_vs_pinnacle): EV >= %2'de ROI +%7.9, CLV +%3.6.
+Basketbol için geçmiş oran verisi yok; aynı kural uygulanır ve predictions + kapanış oranlarıyla izlenir.
 Kendi modelimiz (Dixon-Coles) piyasayı geçemediği için karara katılmaz; LLM sadece gerekçe metni yazar.
 """
 from collections import defaultdict
@@ -19,8 +20,9 @@ def _norm(name):
     return str(name).strip().lower()
 
 def _outcomes_1x2(event):
-    """{bookmaker: {'HOME_WIN': price, 'DRAW': price, 'AWAY_WIN': price}}"""
+    """{bookmaker: {'HOME_WIN': price, ('DRAW': price,) 'AWAY_WIN': price}} — futbolda 3, basketbolda 2 seçenek."""
     home, away = _norm(event.get("home_team")), _norm(event.get("away_team"))
+    n_outcomes = 3 if str(event.get("sport_key", "")).startswith("soccer") else 2
     out = {}
     for b in event.get("bookmakers") or []:
         for m in b.get("markets") or []:
@@ -32,7 +34,7 @@ def _outcomes_1x2(event):
                 key = "HOME_WIN" if n == home else "AWAY_WIN" if n == away else "DRAW" if n == "draw" else None
                 if key and o.get("price"):
                     sel[key] = float(o["price"])
-            if len(sel) == 3:
+            if len(sel) == n_outcomes:
                 out[b["key"]] = sel
     return out
 
@@ -71,8 +73,8 @@ def evaluate_event(event, sharp=None):
     cands = []
     h2h = _outcomes_1x2(event)
     if sharp in h2h:
-        names = ("HOME_WIN", "DRAW", "AWAY_WIN")
-        fair = devig([h2h[sharp][n] for n in names], "shin")
+        names = ("HOME_WIN", "DRAW", "AWAY_WIN") if "DRAW" in h2h[sharp] else ("HOME_WIN", "AWAY_WIN")
+        fair = devig([h2h[sharp][n] for n in names], "shin" if len(names) == 3 else "power")
         for n, p in zip(names, fair):
             b = _best(h2h, n, sharp)
             if b:
@@ -146,11 +148,11 @@ def record_predictions(rows):
                 execute_values(cur, """
                     INSERT INTO predictions (model_name, model_version, sport_key, event_id, commence_time, market,
                         selection, p_model, p_market_fair, price, bookmaker, edge, meta) VALUES %s
-                """, [("football_value", "pinnacle-v1", e.get("sport_key"), e.get("id"), e.get("commence_time"),
+                """, [("value_vs_pinnacle", "pinnacle-v1", e.get("sport_key"), e.get("id"), e.get("commence_time"),
                        c["market"], c["pick"], c["p_fair"], c["p_fair"], c["odds"], c["book"], c["ev"],
                        Json({"sharp_odds": c["sharp_odds"], "bet": bool(r["best"]), "n_books": r["n_books"]}))
                       for e, r in rows for c in [r["best"] or r["top"]]])
             conn.commit()
     except Exception as ex:
         import logging
-        logging.error(f"football predictions yazma hatası: {ex}")
+        logging.error(f"value predictions yazma hatası: {ex}")

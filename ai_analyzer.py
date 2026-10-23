@@ -46,6 +46,8 @@ AI_MODELS = [
     'gemini-2.5-flash',
 ]
 OPENAI_MODEL = "gpt-4o-mini"
+# Groq yedek modelleri (sırayla denenir); GROQ_MODELS="a,b" ile değiştirilebilir
+GROQ_MODELS = [m.strip() for m in os.getenv("GROQ_MODELS", "openai/gpt-oss-120b,qwen/qwen3.8-27b").split(",") if m.strip()]
 
 # Gemini kota koruma: son çağrı zamanını takip et
 _last_gemini_call_time = 0.0
@@ -170,18 +172,21 @@ async def retry_with_backoff(coro_func, *args, max_retries=3, initial_delay=5, *
 async def analyze_with_fallback(prompt):
     """Gemini fail olursa Groq veya OpenRouter ile analiz yapar. (TÜRKÇE)"""
     prompt = f"{prompt}\n\nLÜTFEN TÜRKÇE YANIT VER."
-    # 1. Groq Denemesi
+    # 1. Groq Denemesi (modeller sırayla; llama-3.3-70b-versatile Groq'tan kaldırıldı)
     if groq_client:
-        try:
-            logging.info("Gemini yetersiz, Groq (Llama 3.3) kullanılıyor...")
-            completion = await asyncio.to_thread(
-                groq_client.chat.completions.create,
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": prompt}]
-            )
-            return completion.choices[0].message.content
-        except Exception as e:
-            logging.error(f"Groq Hatası: {e}")
+        for groq_model in GROQ_MODELS:
+            try:
+                logging.info(f"Gemini yetersiz, Groq ({groq_model}) kullanılıyor...")
+                completion = await asyncio.to_thread(
+                    groq_client.chat.completions.create,
+                    model=groq_model,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                text = completion.choices[0].message.content
+                if text:
+                    return text
+            except Exception as e:
+                logging.error(f"Groq Hatası ({groq_model}): {str(e)[:200]}")
 
     # 2. OpenRouter Denemesi
     if OPENROUTER_API_KEY:
@@ -566,25 +571,38 @@ async def analyze_odds(odds_data):
 
 async def explain_value_pick(match, analysis, timeout=45):
     """
-    Futbol değer bahsi için kısa Türkçe gerekçe (Telegram/panel). Karar football_value.py'de verilir;
+    Değer bahsi için kısa Türkçe gerekçe (Telegram/panel). Karar value_bets.py'de verilir;
     LLM olasılık üretmez, rakamları değiştiremez. Başarısız olursa None (özet metin yeterli).
     """
     home, away = match.get("home_team", ""), match.get("away_team", "")
-    league_key = ODDS_TO_STATS_MAP.get(match.get("sport_key", ""))
+    sport_key = match.get("sport_key", "")
+    is_basketball = sport_key.startswith("basketball")
     try:
-        import football_data
-        forms = await asyncio.to_thread(lambda: [football_data.team_form(t, league_key) for t in (home, away)])
-        stats = " | ".join(f for f in forms if f) or "yok"
+        if sport_key == "basketball_nba":
+            stats = await asyncio.to_thread(get_nba_team_stats, home, away)
+            stats = f"{stats} | {await asyncio.to_thread(get_nba_team_stats, away)}"
+        elif "euroleague" in sport_key:
+            stats = f"{await get_euroleague_team_stats(home)} | {await get_euroleague_team_stats(away)}"
+        else:
+            import football_data
+            league_key = ODDS_TO_STATS_MAP.get(sport_key)
+            forms = await asyncio.to_thread(lambda: [football_data.team_form(t, league_key) for t in (home, away)])
+            stats = " | ".join(f for f in forms if f) or "yok"
     except Exception:
         stats = "yok"
+    if not stats or "not found" in stats.lower() or "bulunamadı" in stats.lower():
+        stats = "yok"
+    sport_tr = "basketbol" if is_basketball else "futbol"
     prompt = (
-        "Sen bir futbol bahis analistisin. SADECE TÜRKÇE yaz, en fazla 3 kısa cümle.\n"
+        f"Sen bir {sport_tr} bahis analistisin. SADECE TÜRKÇE yaz, en fazla 3 kısa cümle.\n"
         f"Maç: {home} - {away}\n"
         f"Karar (değiştirme): {analysis['recommendation']} @ {analysis['odds_value']:.2f} ({analysis['bookmaker']}).\n"
         f"Gerekçe verisi: Pinnacle marjsız olasılığı %{analysis['p_fair'] * 100:.1f}, beklenen değer "
-        f"{analysis['ev'] * 100:+.1f}%. Takım verisi: {stats}\n"
+        f"{analysis['ev'] * 100:+.1f}%. Takım verisi: {stats[:1200]}\n"
         "Kurallar: Yeni olasılık veya yüzde uydurma; 'garanti', 'kesin' gibi ifadeler kullanma. "
         "Değer, bu şirketin fiyatının keskin piyasanın (Pinnacle) adil fiyatından yüksek olmasından gelir; bunu belirt. "
+        "Beklenen değer kazanma olasılığını değiştirmez, sadece fiyatın adil fiyattan iyi olduğunu gösterir; "
+        "olasılığın arttığını ima etme. "
         "Takım verisi varsa 1-2 somut rakam kullan; 'yok' ise veriden hiç bahsetme."
     )
     try:

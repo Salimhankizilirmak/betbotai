@@ -43,7 +43,7 @@ PROP_MIN_SEASON_GAMES = int(os.getenv("PROP_MIN_SEASON_GAMES", "3"))  # oyuncunu
 PROP_MARKET_SHRINK = float(os.getenv("PROP_MARKET_SHRINK", "0.5"))   # p = piyasa + λ·(model - piyasa)
 PROP_MAX_RAW_EDGE = float(os.getenv("PROP_MAX_RAW_EDGE", "0.20"))    # ham fark bundan büyükse eksik bilgi var say
 
-# --- Futbol: keskin piyasaya (Pinnacle) göre değer (football_value.py; backtest: reports/football_backtest.json) ---
+# --- Maç bahisleri (futbol + basketbol): keskin piyasaya (Pinnacle) göre değer (value_bets.py; backtest: reports/football_backtest.json) ---
 FOOTBALL_SHARP_BOOK = "pinnacle"
 FOOTBALL_MIN_EV = float(os.getenv("FOOTBALL_MIN_EV", "0.02"))
 FOOTBALL_ODDS_MIN = 1.30
