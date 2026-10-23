@@ -8,6 +8,8 @@ Zamanlanmış işler (GitHub Actions veya Windows Görev Zamanlayıcı buradan �
     python jobs.py health    # DB bağlantısı + Odds API kredisi (kota harcamaz) + NBA kaynak erişimi
     python jobs.py nba-ingest    # ESPN'den son NBA maçlarının box score'larını biriktir
     python jobs.py nba-backfill  # önceki sezonun son haftalarını biriktir (sezon başı için, tek sefer)
+    python jobs.py football-ingest    # football-data.co.uk bu sezon (TR'den engelli; GitHub Actions'ta çalışır)
+    python jobs.py football-backfill  # 2019-20'den bugüne tüm sezonlar (tek sefer)
 
 Her komut bir tur çalışır ve çıkar. Ortak durum Supabase'de tutulur (bkz. cache_store.py).
 """
@@ -35,9 +37,11 @@ async def job_props():
 
 async def job_resolve():
     from ingest.odds_snapshots import prune_snapshots
+    import football_data
     await main.run_resolve_cycle(revalidate=True)
     pruned = await asyncio.to_thread(prune_snapshots)
-    return {"ok": True, "snapshots_pruned": pruned}
+    football = await asyncio.to_thread(football_data.ingest)
+    return {"ok": True, "snapshots_pruned": pruned, "football_rows": football.get("rows")}
 
 async def job_closing():
     from ingest.odds_snapshots import collect_closing_lines
@@ -98,8 +102,17 @@ async def job_nba_backfill():
     end = date.fromisoformat(os.getenv("NBA_BACKFILL_END", f"{y}-04-15"))
     return await asyncio.to_thread(espn_nba.ingest_range, start, end)
 
+async def job_football_ingest():
+    import football_data
+    return await asyncio.to_thread(football_data.ingest)
+
+async def job_football_backfill():
+    import football_data
+    return await asyncio.to_thread(football_data.ingest, football_data.all_season_codes())
+
 JOBS = {"analyze": job_analyze, "props": job_props, "resolve": job_resolve, "closing": job_closing, "health": job_health,
-        "nba-ingest": job_nba_ingest, "nba-backfill": job_nba_backfill}
+        "nba-ingest": job_nba_ingest, "nba-backfill": job_nba_backfill,
+        "football-ingest": job_football_ingest, "football-backfill": job_football_backfill}
 
 def run(name):
     t0 = time.time()

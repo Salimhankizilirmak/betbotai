@@ -1,0 +1,13 @@
+name: job-football-backfill
+# Elle çalıştırılır: football-data.co.uk 2019-20'den bugüne 6 ligin maç + oran CSV'lerini Supabase'e yükler
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backfill:
+    uses: ./.github/workflows/_run-job.yml
+    with:
+      task: football-backfill
+      timeout: 30
+    secrets: inherit

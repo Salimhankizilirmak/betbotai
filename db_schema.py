@@ -84,6 +84,17 @@ SCHEMA_STATEMENTS = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_nba_player_games_player ON nba_player_games (player_key, game_date DESC)",
     "CREATE INDEX IF NOT EXISTS idx_nba_player_games_team ON nba_player_games (season, team_abbr)",
+    # Geçmiş futbol maçları + oranlar (football-data.co.uk); supabase/migrations/*_football_matches.sql ile aynı
+    """
+    CREATE TABLE IF NOT EXISTS football_matches (
+        match_key TEXT PRIMARY KEY, league TEXT NOT NULL, season TEXT NOT NULL, match_date DATE NOT NULL,
+        kickoff TEXT, home_team TEXT NOT NULL, away_team TEXT NOT NULL, fthg INTEGER, ftag INTEGER, hthg INTEGER,
+        htag INTEGER, home_shots INTEGER, away_shots INTEGER, home_sot INTEGER, away_sot INTEGER, odds JSONB,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_football_matches_league_date ON football_matches (league, match_date)",
+    "ALTER TABLE football_matches ENABLE ROW LEVEL SECURITY",
     "ALTER TABLE nba_games ENABLE ROW LEVEL SECURITY",
     "ALTER TABLE nba_player_games ENABLE ROW LEVEL SECURITY",
     # Supabase Data API (anon anahtar) erişemesin; bot postgres rolüyle bağlanır, RLS'ten etkilenmez.
