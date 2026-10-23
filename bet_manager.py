@@ -32,7 +32,8 @@ def send_telegram_message(text: str):
     
     chat_ids = [c.strip() for c in chat_ids_str.split(",")]
     
-    for chat_id in chat_ids:
+    # Loglarda sohbet kimliği / Telegram yanıtı (ad, kullanıcı adı) yazılmaz: GitHub Actions logları herkese açık
+    for n, chat_id in enumerate(chat_ids, 1):
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = urllib.parse.urlencode({
             "chat_id": chat_id,
@@ -40,13 +41,12 @@ def send_telegram_message(text: str):
             "parse_mode": "HTML"
         }).encode("utf-8")
         try:
-            logging.info(f"Sending Telegram message to {chat_id}...")
             req = urllib.request.Request(url, data=payload)
             with urllib.request.urlopen(req, timeout=10) as response:
-                res_body = response.read().decode("utf-8")
-                logging.info(f"Telegram response for {chat_id}: {res_body}")
+                ok = json.loads(response.read().decode("utf-8")).get("ok")
+                logging.info(f"Telegram mesajı (alıcı {n}/{len(chat_ids)}): {'gönderildi' if ok else 'reddedildi'}")
         except Exception as e:
-            logging.error(f"Telegram execution failed for {chat_id}: {e}")
+            logging.error(f"Telegram gönderimi başarısız (alıcı {n}/{len(chat_ids)}): {type(e).__name__}")
             
     # X (Twitter) Gönderimi: herkese açık olduğu için sadece POST_TO_X=true ise
     if not settings.POST_TO_X:
