@@ -1,5 +1,9 @@
 """Değer seçicisi (Pinnacle'a göre; futbol + basketbol) için çevrimdışı testler: python test_value_bets.py"""
+import strategy
 import value_bets as fv
+
+# Bu testlerin çoğu genel değer mantığını sınar; tekli bahis oran aralığı ayrı testte (test_single_odds_range)
+strategy.SINGLE_ODDS_MAX = 4.00
 from market.devig import devig
 
 
@@ -73,6 +77,21 @@ def test_basketball_two_way_moneyline_and_totals():
     assert abs(home["p_fair"] - fair[0]) < 1e-12 and not any(c["pick"] == "DRAW" for c in r["candidates"])
     assert r["best"]["pick"] == "HOME_WIN" and abs(r["best"]["ev"] - (fair[0] * 1.92 - 1)) < 1e-12
     assert any(c["pick"] == "OVER 221.5" for c in r["candidates"])
+
+
+def test_single_odds_range_high_hit_mode():
+    e = event(book("pinnacle", 2.00, 3.60, 3.90), book("onexbet", 2.20, 3.40, 3.70))  # 1 @2.20 EV ~ +%7
+    old = strategy.SINGLE_ODDS_MAX
+    try:
+        strategy.SINGLE_ODDS_MAX = 2.00
+        r = fv.evaluate_event(e)
+        assert r["best"] is None and r["top"]["pick"] == "HOME_WIN"   # değerli ama 2.00 üstü: tekli bahis yok
+        assert "aralığı dışında" in fv.summary_text(e, r)
+        assert fv.book_candidates(e)["onexbet"][0]["odds"] == 2.20     # kupon bacağı olarak hâlâ aday
+        fav = event(book("pinnacle", 1.62, 4.00, 5.60), book("onexbet", 1.72, 3.80, 5.20))   # 1 @1.72 EV ~ +%3.3
+        assert fv.evaluate_event(fav)["best"]["odds"] == 1.72
+    finally:
+        strategy.SINGLE_ODDS_MAX = old
 
 
 if __name__ == "__main__":

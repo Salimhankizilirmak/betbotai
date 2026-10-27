@@ -91,8 +91,9 @@ def evaluate_event(event, sharp=None):
                               "odds": b[0], "book": b[1], "sharp_odds": books[sharp][side], "ev": p * b[0] - 1})
     if not cands:
         return None
+    # Tekli bahis: "yüksek isabet modu" oran aralığı (SINGLE_ODDS_*); kupon bacakları book_candidates'ta FOOTBALL_ODDS_*
     ok = [c for c in cands if strategy.FOOTBALL_MIN_EV <= c["ev"] <= strategy.FOOTBALL_MAX_EV
-          and strategy.FOOTBALL_ODDS_MIN <= c["odds"] <= strategy.FOOTBALL_ODDS_MAX]
+          and strategy.SINGLE_ODDS_MIN <= c["odds"] <= strategy.SINGLE_ODDS_MAX]
     return {"candidates": cands, "best": max(ok, key=lambda c: c["ev"]) if ok else None,
             "top": max(cands, key=lambda c: c["ev"]), "sharp_book": sharp,
             "n_books": len({b.get("key") for b in event.get("bookmakers") or []})}
@@ -108,7 +109,12 @@ def pick_label(pick):
 def summary_text(event, res):
     """Karar özeti (LLM'siz, her zaman doğru rakamlarla)."""
     c = res["best"] or res["top"]
-    verdict = "DEĞER VAR" if res["best"] else "değer yok"
+    if res["best"]:
+        verdict = "DEĞER VAR"
+    elif c["ev"] >= strategy.FOOTBALL_MIN_EV:
+        verdict = f"değer var ama oran {strategy.SINGLE_ODDS_MIN:.2f}-{strategy.SINGLE_ODDS_MAX:.2f} tekli bahis aralığı dışında"
+    else:
+        verdict = "değer yok"
     return (f"{pick_label(c['pick'])}: Pinnacle marjsız olasılık %{c['p_fair'] * 100:.1f} "
             f"(Pinnacle oranı {c['sharp_odds']:.2f}), en iyi oran {c['odds']:.2f} ({c['book']}) → "
             f"beklenen değer {c['ev'] * 100:+.1f}% [{verdict}; eşik +%{strategy.FOOTBALL_MIN_EV * 100:.0f}, "

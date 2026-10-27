@@ -591,9 +591,10 @@ async def explain_value_pick(match, analysis, facts_text=None, timeout=45):
                     f"Pinnacle marjsız olasılığı: %{analysis['p_fair'] * 100:.1f}, beklenen değer: {analysis['ev'] * 100:+.1f}%\n\n")
         structure = "(4) bu seçimin neden değerli olduğu ve riski."
     else:
-        decision = ("Karar: Mevcut fiyatlarda hiçbir şirket Pinnacle'ın adil fiyatını yeterince geçmiyor, bu maçta BAHİS ÖNERİLMİYOR. "
+        decision = ("Karar: Bu maçta tekli bahis kriterlerine (Pinnacle'a göre beklenen değer en az %2 VE oran 1.30-2.00) "
+                    "uyan bir seçim yok, bu maçta BAHİS ÖNERİLMİYOR. "
                     "Bir seçim önerme; maçın önizlemesini yap ve en olası senaryoları Pinnacle olasılıklarıyla açıkla.\n\n")
-        structure = "(4) neden bu fiyatlarla bahis için değer olmadığı (kısa)."
+        structure = "(4) neden bu maçta bahis önerilmediği (kısa; veri bloğundaki karar satırına dayan)."
     prompt = (
         f"Sen deneyimli bir {sport_tr} analistisin. SADECE TÜRKÇE, akıcı ve profesyonel bir dille 4-6 cümlelik "
         f"bir maç analizi yaz (madde işareti kullanma).\n\n"

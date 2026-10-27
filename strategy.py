@@ -53,3 +53,14 @@ FOOTBALL_ODDS_MIN = 1.30
 FOOTBALL_ODDS_MAX = 4.00
 # Çok yüksek EV genelde bayat/hatalı oran demektir (bir şirket fiyatı güncellememiş); bahis alınmaz
 FOOTBALL_MAX_EV = float(os.getenv("FOOTBALL_MAX_EV", "0.10"))
+
+# --- 27 Ekim 2026 kararı (canlı sonuçlar: prop modeli %33 isabet / beklenen %56, ROI -%36) ---
+# NBA oyuncu prop'larına bahis alınmaz ve 3 oyunculu prop kuponu yapılmaz; projeksiyonlar panelde bilgi olarak kalır.
+PROP_BETTING_ENABLED = os.getenv("PROP_BETTING_ENABLED", "false").lower() == "true"
+NBA_PROP_COUPON_ENABLED = os.getenv("NBA_PROP_COUPON_ENABLED", "false").lower() == "true"
+# Prop bahisleri tekrar açılırsa: stake üst sınırı (Kelly'nin verdiği ~220 BB yerine)
+PROP_MAX_STAKE = float(os.getenv("PROP_MAX_STAKE", "25"))
+# Tekli değer bahisleri "yüksek isabet modu": sadece 1.30-2.00 oran (backtest isabeti ~%57-70).
+# Kupon bacakları FOOTBALL_ODDS_MIN/MAX (1.30-4.00) aralığında kalır.
+SINGLE_ODDS_MIN = float(os.getenv("SINGLE_ODDS_MIN", "1.30"))
+SINGLE_ODDS_MAX = float(os.getenv("SINGLE_ODDS_MAX", "2.00"))

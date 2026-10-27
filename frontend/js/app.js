@@ -572,7 +572,7 @@ async function fetchCoupons() {
         const data = await res.json();
         const coupons = data.coupons || [];
         if (coupons.length === 0) {
-            grid.innerHTML = "<div class='glass-panel' style='padding:20px; color:var(--text-secondary); grid-column:1/-1; text-align:center;'>Henüz kupon yok. Futbol kuponu her gün 12:00'de, NBA kuponu 00:40'ta (TR) hazırlanır; değer yoksa kupon çıkmaz.</div>";
+            grid.innerHTML = "<div class='glass-panel' style='padding:20px; color:var(--text-secondary); grid-column:1/-1; text-align:center;'>Henüz kupon yok. Futbol kuponu her gün 12:00'de (TR) hazırlanır; değer yoksa kupon çıkmaz.</div>";
             return;
         }
         const statusColor = {WON: '#10b981', LOST: '#ef4444', VOID: '#94a3b8', PENDING: '#f59e0b'};

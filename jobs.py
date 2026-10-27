@@ -130,6 +130,8 @@ async def job_nba_coupon():
     """Gece maçlarından önce: prop turunu tazele, model eşiklerini geçenlerden 3 farklı maçtan 3 oyuncu."""
     import coupons
     from ai_analyzer import NBA_PROPS_CACHE
+    if not strategy.NBA_PROP_COUPON_ENABLED:
+        return {"skipped": "NBA_PROP_COUPON_ENABLED=false (27.10.2026: prop modeli canlıda beklentinin altında)"}
     props = await main.run_props_cycle(resolve_first=False)
     coupon, stats = coupons.build_nba(NBA_PROPS_CACHE.get("data", []))
     out = await asyncio.to_thread(coupons.publish, "nba_props", coupon, stats)

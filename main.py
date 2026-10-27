@@ -29,6 +29,7 @@ from nba_player_props import analyze_nba_player_props
 from leagues import ANALYZED_SPORTS
 from dotenv import load_dotenv
 import settings
+import strategy
 
 # GLOBAL TIMEZONE SYNC
 os.environ['TZ'] = 'Europe/Istanbul'
@@ -425,7 +426,7 @@ async def background_resolver():
             await asyncio.sleep(60)
 
 MAX_LLM_ANALYSES_PER_RUN = 15  # tur başına en fazla yeni LLM analizi (önbellekteki analizler sayılmaz)
-EXPLAIN_VERSION = 3            # analiz istemi/veri bloğu değişince artır: eski analizler yeniden yazılır
+EXPLAIN_VERSION = 4            # analiz istemi/veri bloğu değişince artır: eski analizler yeniden yazılır
 
 async def run_value_cycle(events, max_bets=10, label="maç"):
     """
@@ -583,6 +584,10 @@ async def run_props_cycle(resolve_first=True):
     # bkz. nba_player_props.passes_thresholds). Genel maç süzgeci (%65 olasılık) prop'lara uygulanmaz:
     # kalibre olasılıklarda ~1.85 orana %65 neredeyse hiç çıkmaz.
     prop_count = 0
+    if not strategy.PROP_BETTING_ENABLED:
+        # 27.10.2026: canlıda prop modeli %33 isabet (beklenen %56) -> bahis kapalı, projeksiyonlar bilgi olarak kalır
+        logging.info(f"NBA prop bahisleri kapalı (PROP_BETTING_ENABLED=false); {len(all_recs)} öneri sadece panelde.")
+        return {"props": len(all_recs), "bets_placed": 0}
     for prop in all_recs[:15]: # En yüksek edge'li 15 prop'u incele
         analysis = {
             "bet_target": prop["bet_target"],
@@ -604,7 +609,7 @@ async def run_props_cycle(resolve_first=True):
         # Çeyrek Kelly, modelin (kalibre) olasılığı ve seçilen tarafın oranıyla
         current_bal = get_current_balance()
         kelly_stake = calculate_kelly_stake(prop["odds"], prop["p_model"] * 100, current_bal)
-        final_stake = round(kelly_stake * multiplier, 2)
+        final_stake = round(min(kelly_stake * multiplier, strategy.PROP_MAX_STAKE), 2)
 
         # Maç nesnesini taklit et
         mock_match = {

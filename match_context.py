@@ -199,7 +199,14 @@ def render_text(event, facts):
     c = m.get("pick")
     if c:
         import value_bets as vb
-        head = "💰 Seçim" if c["ev"] >= 0.02 else "🔍 En yakın aday (değer yok)"
+        import strategy
+        in_range = strategy.SINGLE_ODDS_MIN <= c["odds"] <= strategy.SINGLE_ODDS_MAX
+        if c["ev"] >= strategy.FOOTBALL_MIN_EV and in_range:
+            head = "💰 Seçim"
+        elif c["ev"] >= strategy.FOOTBALL_MIN_EV:
+            head = f"🔍 Değerli ama oran {strategy.SINGLE_ODDS_MIN:.2f}-{strategy.SINGLE_ODDS_MAX:.2f} dışında (bahis yok)"
+        else:
+            head = "🔍 En yakın aday (değer yok)"
         lines.append(f"{head}: {vb.pick_label(c['pick'])} @ {c['odds']:.2f} ({c['book']}) — Pinnacle {c['sharp_odds']:.2f}, "
                      f"adil olasılık %{c['p_fair'] * 100:.1f}, beklenen değer {c['ev'] * 100:+.1f}%")
     mv = m.get("move")
