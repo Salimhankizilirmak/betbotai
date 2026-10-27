@@ -1,6 +1,9 @@
 """Değer seçicisi (Pinnacle'a göre; futbol + basketbol) için çevrimdışı testler: python test_value_bets.py"""
 import strategy
 import value_bets as fv
+import time as _time
+import learning
+learning._overrides_cache.update(v={}, ts=_time.time())  # testler DB'ye gitmesin
 
 # Bu testlerin çoğu genel değer mantığını sınar; tekli bahis oran aralığı ayrı testte (test_single_odds_range)
 strategy.SINGLE_ODDS_MAX = 4.00

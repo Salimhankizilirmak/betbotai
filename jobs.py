@@ -12,6 +12,7 @@ Zamanlanmış işler (GitHub Actions veya Windows Görev Zamanlayıcı buradan �
     python jobs.py football-backfill  # 2019-20'den bugüne tüm sezonlar (tek sefer)
     python jobs.py football-coupon    # günün futbol kuponu (<= 5 maç, toplam oran <= 8.00) -> Telegram
     python jobs.py nba-coupon         # gece öncesi 3 oyunculu NBA prop kuponu -> Telegram
+    python jobs.py learn              # haftalık öğrenme raporu + CLV'ye göre korumalı otomatik ayar -> Telegram
 
 Her komut bir tur çalışır ve çıkar. Ortak durum Supabase'de tutulur (bkz. cache_store.py).
 """
@@ -137,10 +138,15 @@ async def job_nba_coupon():
     out = await asyncio.to_thread(coupons.publish, "nba_props", coupon, stats)
     return {"props_cycle": props, **out}
 
+async def job_learn():
+    """Haftalık öğrenme: CLV/kalibrasyon/segment raporu -> Telegram, CLV'ye göre korumalı otomatik ayar."""
+    import learning
+    return await asyncio.to_thread(learning.run)
+
 JOBS = {"analyze": job_analyze, "props": job_props, "resolve": job_resolve, "closing": job_closing, "health": job_health,
         "nba-ingest": job_nba_ingest, "nba-backfill": job_nba_backfill,
         "football-ingest": job_football_ingest, "football-backfill": job_football_backfill,
-        "football-coupon": job_football_coupon, "nba-coupon": job_nba_coupon}
+        "football-coupon": job_football_coupon, "nba-coupon": job_nba_coupon, "learn": job_learn}
 
 def run(name):
     t0 = time.time()

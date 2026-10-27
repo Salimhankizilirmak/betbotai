@@ -119,7 +119,7 @@ def get_performance_metrics():
     Hangi liglerde başarılı/başarısız olduğumuzu döner.
     """
     stats = get_structured_stats()
-    if not stats or stats.get("total_resolved", 0) == 0:
+    if not stats or stats["summary"].get("total_resolved", 0) == 0:
         return "Henüz yeterli veri yok."
     
     summary = stats["summary"]
@@ -265,10 +265,13 @@ def place_virtual_bet(event, ai_analysis, custom_amount=None):
             odds_value = ai_analysis.get('odds_value')
             risk_score = ai_analysis.get('risk_score', 50)
             
+            # Öğrenme raporu (learning.py) için: hangi şirket/market/yöntem ve bahis anındaki Pinnacle olasılığı
             cursor.execute('''
-                INSERT INTO bets (match_id, sport_key, home_team, away_team, commence_time, risk_score, bet_target, odds_value, bet_amount, status)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'PENDING')
-            ''', (match_id, sport_key, home_team, away_team, commence_time, risk_score, bet_target, odds_value, amount))
+                INSERT INTO bets (match_id, sport_key, home_team, away_team, commence_time, risk_score, bet_target, odds_value,
+                                  bet_amount, status, bookmaker, market, p_fair, method)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'PENDING', %s, %s, %s, %s)
+            ''', (match_id, sport_key, home_team, away_team, commence_time, risk_score, bet_target, odds_value, amount,
+                  ai_analysis.get('bookmaker'), ai_analysis.get('market'), ai_analysis.get('p_fair'), ai_analysis.get('method')))
             
             with db_lock:
                 conn.commit()

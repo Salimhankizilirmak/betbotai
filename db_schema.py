@@ -112,6 +112,11 @@ SCHEMA_STATEMENTS = [
     # Supabase Data API (anon anahtar) erişemesin; bot postgres rolüyle bağlanır, RLS'ten etkilenmez.
     # supabase/migrations/*_initial_schema.sql ile aynı.
     "ALTER TABLE bets ENABLE ROW LEVEL SECURITY",
+    # öğrenme raporu için bahis meta verisi; supabase/migrations/*_bets_learning_columns.sql ile aynı
+    "ALTER TABLE bets ADD COLUMN IF NOT EXISTS bookmaker TEXT",
+    "ALTER TABLE bets ADD COLUMN IF NOT EXISTS market TEXT",
+    "ALTER TABLE bets ADD COLUMN IF NOT EXISTS p_fair REAL",
+    "ALTER TABLE bets ADD COLUMN IF NOT EXISTS method TEXT",
     "ALTER TABLE odds_snapshots ENABLE ROW LEVEL SECURITY",
     "ALTER TABLE predictions ENABLE ROW LEVEL SECURITY",
 ]

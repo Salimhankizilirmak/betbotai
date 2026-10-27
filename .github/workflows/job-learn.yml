@@ -1,0 +1,14 @@
+name: job-learn
+# Haftalık öğrenme: CLV, kalibrasyon, lig/market/şirket/oran bazında rapor -> Telegram + korumalı otomatik ayar.
+# Zamanlama: Supabase pg_cron Pazartesi 08:00 UTC (TR 11:00)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  learn:
+    uses: ./.github/workflows/_run-job.yml
+    with:
+      task: learn
+      timeout: 20
+    secrets: inherit

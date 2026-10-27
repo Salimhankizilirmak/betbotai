@@ -1,6 +1,9 @@
 """Kupon oluşturucu ve sonuçlandırma için çevrimdışı testler: python test_coupons.py"""
 import math
 from datetime import datetime, timedelta, timezone
+import time as _time
+import learning
+learning._overrides_cache.update(v={}, ts=_time.time())  # testler DB'ye gitmesin
 
 import coupons
 

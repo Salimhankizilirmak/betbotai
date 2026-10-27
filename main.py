@@ -222,6 +222,13 @@ def api_coupons(limit: int = 10):
         r["coupon_date"] = str(r["coupon_date"])
     return {"coupons": rows, "summary": summary}
 
+@app.get("/api/learning")
+def api_learning():
+    """Son haftalık öğrenme raporu ve geçerli otomatik ayarlar (learning.py)."""
+    import cache_store
+    value, ts = cache_store.get("learning", "last_report")
+    return {"updated_at": ts, **(value or {"report": None, "changes": [], "overrides": {}})}
+
 @app.get("/api/health")
 def health():
     from oddsapi_client import CREDIT_STATE
@@ -334,21 +341,13 @@ async def emergency_resolve_stuck_bets():
         logging.error(f"Error in emergency_resolve_stuck_bets: {e}")
 
 async def get_safe_mode_multiplier():
-    """Son performansa göre bahis miktar çarpanı döner (Bot zarardaysa miktar düşer)."""
-    try:
-        import bet_manager
-        metrics = bet_manager.get_performance_metrics()
-        # "Son 20 Maç Başarı Oranı: %45" gibi bir metinden oranı çek
-        import re
-        match = re.search(r'%(\d+)', metrics)
-        if match:
-            win_rate = int(match.group(1))
-            if win_rate < 50:
-                logging.warning(f"SİSTEM GÜVENLİ MODDA: Başarı oranı %{win_rate}. Miktarlar yarıya düşürüldü.")
-                return 0.5
-    except:
-        pass
-    return 1.0
+    """
+    Stake çarpanı (1.0 / 0.5): son değer bahislerinde gerçek isabet beklenenden (Pinnacle olasılığı) anlamlı
+    düşükse (z < -2) veya ortalama CLV < -%2 ise yarıya iner. Bkz. learning.stake_multiplier.
+    (Eski kural "başarı oranı < %50" idi; ortalama oran ~2.5 iken bu normaldir.)
+    """
+    import learning
+    return await asyncio.to_thread(learning.stake_multiplier)
 
 def verify_and_place_bet(analysis, event):
     """

@@ -11,6 +11,7 @@ Kendi modelimiz (Dixon-Coles) piyasayı geçemediği için karara katılmaz; LLM
 """
 from collections import defaultdict
 
+import learning
 import strategy
 from market.devig import devig
 
@@ -92,8 +93,12 @@ def evaluate_event(event, sharp=None):
     if not cands:
         return None
     # Tekli bahis: "yüksek isabet modu" oran aralığı (SINGLE_ODDS_*); kupon bacakları book_candidates'ta FOOTBALL_ODDS_*
-    ok = [c for c in cands if strategy.FOOTBALL_MIN_EV <= c["ev"] <= strategy.FOOTBALL_MAX_EV
-          and strategy.SINGLE_ODDS_MIN <= c["odds"] <= strategy.SINGLE_ODDS_MAX]
+    # learning.py: EV eşiği ve CLV'si güvenle negatif segmentler (lig/market/şirket) haftalık ayarlanır
+    overrides = learning.get_overrides()
+    floor = learning.min_ev(overrides)
+    ok = [c for c in cands if floor <= c["ev"] <= strategy.FOOTBALL_MAX_EV
+          and strategy.SINGLE_ODDS_MIN <= c["odds"] <= strategy.SINGLE_ODDS_MAX
+          and not learning.is_blocked(event.get("sport_key"), c["market"], c["book"], overrides)]
     return {"candidates": cands, "best": max(ok, key=lambda c: c["ev"]) if ok else None,
             "top": max(cands, key=lambda c: c["ev"]), "sharp_book": sharp,
             "n_books": len({b.get("key") for b in event.get("bookmakers") or []})}
@@ -175,11 +180,14 @@ def book_candidates(event, sharp=None):
     """
     sharp = sharp or strategy.FOOTBALL_SHARP_BOOK
     out = defaultdict(list)
+    overrides = learning.get_overrides()
+    floor = learning.min_ev(overrides)
 
     def add(book, market, pick, p, odds, sharp_odds):
         ev = p * odds - 1
-        if (strategy.FOOTBALL_MIN_EV <= ev <= strategy.FOOTBALL_MAX_EV
-                and strategy.FOOTBALL_ODDS_MIN <= odds <= strategy.FOOTBALL_ODDS_MAX):
+        if (floor <= ev <= strategy.FOOTBALL_MAX_EV
+                and strategy.FOOTBALL_ODDS_MIN <= odds <= strategy.FOOTBALL_ODDS_MAX
+                and not learning.is_blocked(event.get("sport_key"), market, book, overrides)):
             out[book].append({"market": market, "pick": pick, "bet_target": pick, "p_fair": p, "odds": odds,
                               "book": book, "sharp_odds": sharp_odds, "ev": ev})
 
