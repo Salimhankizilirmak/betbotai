@@ -71,22 +71,50 @@ def flatten_events(events, kind="regular"):
 # Sadece kuponda kullanılan marketler saklanır (spreads vb. atlanır)
 STORED_MARKETS = {"h2h", "totals", *strategy.NBA_PROP_MARKETS}
 
-# Süreç içi son fiyat: (event, şirket, market, seçim, oyuncu, çizgi) -> fiyat
+# Son fiyat: (event, şirket, market, seçim, oyuncu, çizgi) -> fiyat. Her GitHub Actions işi yeni bir süreç
+# olduğu için bellek tek başına yetmez; bir event'in son fiyatları ilk görüldüğünde DB'den yüklenir.
 _last_price = {}
+_loaded_events = set()
+
+def _key(r):
+    point = None if r["point"] is None else round(float(r["point"]), 2)
+    return (r["event_id"], r["bookmaker"], r["market"], r["selection"], r["player"], point)
+
+def load_last_prices(event_ids):
+    """Bu süreçte henüz yüklenmemiş event'lerin DB'deki son 'regular' fiyatlarını _last_price'a alır."""
+    todo = [e for e in set(event_ids) if e and e not in _loaded_events]
+    if not todo:
+        return 0
+    try:
+        from bet_manager import get_db_connection
+        with get_db_connection() as conn, conn.cursor() as cur:
+            cur.execute("""
+                SELECT DISTINCT ON (event_id, bookmaker, market, selection, player, point)
+                       event_id, bookmaker, market, selection, player, point, price
+                FROM odds_snapshots WHERE snapshot_kind = 'regular' AND event_id = ANY(%s)
+                ORDER BY event_id, bookmaker, market, selection, player, point, captured_at DESC
+            """, (todo,))
+            for r in cur.fetchall():
+                _last_price.setdefault(_key(r), round(float(r["price"]), 3))
+        _loaded_events.update(todo)
+        return len(todo)
+    except Exception as e:
+        logging.error(f"son fiyatlar yüklenemedi: {e}")
+        return 0
 
 def filter_changed(rows):
     """
     'regular' snapshot'larda fiyatı değişmeyen satırları atar (DB şişmesin);
-    'closing' snapshot'lar her zaman tam kaydedilir.
+    'closing' snapshot'lar her zaman tam kaydedilir. (REAL kolon float32: fiyatlar 3 haneye yuvarlanıp karşılaştırılır)
     """
     out = []
     for r in rows:
         if r["market"] not in STORED_MARKETS:
             continue
-        key = (r["event_id"], r["bookmaker"], r["market"], r["selection"], r["player"], r["point"])
-        if r["snapshot_kind"] == "regular" and _last_price.get(key) == r["price"]:
+        key, price = _key(r), round(float(r["price"]), 3)
+        if r["snapshot_kind"] == "regular" and _last_price.get(key) == price:
             continue
-        _last_price[key] = r["price"]
+        _last_price[key] = price
         out.append(r)
     return out
 
@@ -109,7 +137,10 @@ def save_rows(rows):
 
 async def record_odds_response(events, kind="regular"):
     """Async çağıranlar için: DB yazımını thread'de yapar."""
-    rows = filter_changed(flatten_events(events, kind))
+    rows = flatten_events(events, kind)
+    if kind == "regular":
+        await asyncio.to_thread(load_last_prices, [r["event_id"] for r in rows])
+    rows = filter_changed(rows)
     if not rows:
         return 0
     return await asyncio.to_thread(save_rows, rows)
