@@ -65,6 +65,7 @@ def test_is_blocked_and_odds_bucket():
     assert learning.is_blocked("soccer_spain_la_liga", "h2h", "onexbet", o)
     assert not learning.is_blocked("soccer_spain_la_liga", "h2h", "unibet_se", o)
     assert learning.odds_bucket(1.45) == "1.30-1.60" and learning.odds_bucket(3.9) == "3.20-4.00"
+    assert learning.odds_bucket(5.5) == ">4.00" and learning.odds_bucket(1.2) == "<1.30"
 
 
 def test_report_message_renders():

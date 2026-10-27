@@ -45,7 +45,7 @@ def odds_bucket(odds):
     for lo, hi in ODDS_BUCKETS:
         if lo <= odds < hi:
             return f"{lo:.2f}-{min(hi, 4.0):.2f}"
-    return "diğer"
+    return "<1.30" if odds < ODDS_BUCKETS[0][0] else ">4.00"
 
 def league_of(sport_key):
     return (sport_key or "?").replace("soccer_", "").replace("basketball_", "")
